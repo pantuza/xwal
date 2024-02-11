@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option go_package = "./xwalpb";
+
+message WALEntry {
+
+  // Log Sequence Number
+  uint64   LSN = 1;
+
+  // Actual log data
+  bytes   Data = 2;
+
+  // Cyclic Redundant Check
+  uint32  CRC = 3;
+}
