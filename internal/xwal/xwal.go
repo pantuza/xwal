@@ -19,3 +19,7 @@ func NewXWAL(cfg XWALConfig) (*XWAL, error) {
 	xwal.cfg = cfg
 	return &xwal, nil
 }
+
+func (wal *XWAL) configure() error {
+	return nil
+}

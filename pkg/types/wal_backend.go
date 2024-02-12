@@ -1,12 +1,14 @@
 package types
 
+import "github.com/pantuza/xwal/protobuf/xwalpb"
+
 type WALBackendInterface interface {
 	// Write appends a new entry to the log.
-	Write(entry LogEntry) error
+	Write(entry xwalpb.WALEntry) error
 
 	// Read returns a log entry at a specific index.
 	// If the entry does not exist, an error should be returned.
-	Read(index int64) (LogEntry, error)
+	Read(index int64) (xwalpb.WALEntry, error)
 
 	// Replays log from beginning
 	Replay() error
