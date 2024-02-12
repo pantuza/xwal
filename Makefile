@@ -27,3 +27,7 @@ test: ## Runs the library tests
 .PHONY: lint
 lint: ## Runs the Golang Linter
 	@go test ./...
+
+.PHONY: setup
+setup: ./scripts/local_setup.sh ## Sets up the local machine with OS level tools and dependencies
+	@. $^
