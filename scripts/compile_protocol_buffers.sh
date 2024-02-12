@@ -1,6 +1,5 @@
 #!/bin/bash
 
-GO=$(which go)
 PROTOC=$(which protoc)
 
 # The script is executed by Makefile, thereby path is relative to Makefile
@@ -8,10 +7,8 @@ SRC_DIR=protobuf/
 DST_DIR=protobuf/
 
 if [ -z "${PROTOC}" ]; then
-	echo "protoc not found. Installing Protocol Buffers compiler.."
-	brew install protobuf
-	brew link --overwrite protobuf
-	${GO} install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	echo "protoc compiler not found. Please, run 'make setup' to configure your local machine to use this project."
+	exit 1
 fi
 
 echo "Compiling Protocol Buffers.."
