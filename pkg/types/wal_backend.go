@@ -23,3 +23,10 @@ type WALBackendInterface interface {
 	// This can be used to resume operations after a restart.
 	LastIndex() (int64, error)
 }
+
+type WALBackendType string
+
+const (
+	LocalFileSystemWALBackend = "local_filesystem"
+	AWSS3WALBackend           = "aws_s3"
+)
