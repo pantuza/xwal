@@ -11,17 +11,15 @@ import (
 func main() {
 	fmt.Println("xWAL library")
 	entry := &xwalpb.WALEntry{
-
 		LSN:  42,
 		Data: []byte("fake data"),
 		CRC:  42,
 	}
 	spew.Dump(entry)
 
-	xwal, err := xwal.NewXWAL(xwal.XWALConfig{})
+	xwal, err := xwal.NewXWAL(*xwal.NewXWALConfig(""))
 	if err != nil {
 		fmt.Errorf(err.Error())
 	}
 	spew.Dump(xwal)
-
 }
