@@ -1,13 +1,19 @@
 package localfs
 
-import "github.com/pantuza/xwal/protobuf/xwalpb"
+import (
+	"github.com/pantuza/xwal/protobuf/xwalpb"
+)
 
 type LocalFSBackend struct {
 	cfg struct {
 	}
 }
 
-func (wal *LocalFSBackend) Open() (WALBackendInterface, error) {
+func NewLocalFSWALBackend() *LocalFSBackend {
+	return &LocalFSBackend{}
+}
+
+func (wal *LocalFSBackend) Open() error {
 	return nil
 }
 
@@ -19,8 +25,8 @@ func (wal *LocalFSBackend) Read(index int64) (xwalpb.WALEntry, error) {
 	return xwalpb.WALEntry{}, nil
 }
 
-func (wal *LocalFSBackend) Replay() ([]*xwal.WALEntry, error) {
-	return nil
+func (wal *LocalFSBackend) Replay() ([]*xwalpb.WALEntry, error) {
+	return nil, nil
 }
 
 func (wal *LocalFSBackend) Flush() error {

@@ -5,7 +5,7 @@ import "github.com/pantuza/xwal/protobuf/xwalpb"
 type WALBackendInterface interface {
 
 	// Open initializes the WAL for reading and writing.
-	Open() (WALBackendInterface, error)
+	Open() error
 
 	// Write appends a new entry to the log.
 	Write(entry xwalpb.WALEntry) error
