@@ -19,7 +19,7 @@ func main() {
 
 	xwal, err := xwal.NewXWAL(*xwal.NewXWALConfig(""))
 	if err != nil {
-		fmt.Errorf(err.Error())
+		fmt.Println(err.Error())
 	}
 	spew.Dump(xwal)
 }
