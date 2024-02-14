@@ -3,6 +3,10 @@ package types
 import "github.com/pantuza/xwal/protobuf/xwalpb"
 
 type WALBackendInterface interface {
+
+	// Open initializes the WAL for reading and writing.
+	Open() (WALBackendInterface, error)
+
 	// Write appends a new entry to the log.
 	Write(entry xwalpb.WALEntry) error
 
@@ -11,7 +15,7 @@ type WALBackendInterface interface {
 	Read(index int64) (xwalpb.WALEntry, error)
 
 	// Replays log from beginning
-	Replay() error
+	Replay() ([]*xwalpb.WALEntry, error)
 
 	// Flush ensures that all buffered log entries are written to the storage.
 	Flush() error
