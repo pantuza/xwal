@@ -32,6 +32,7 @@ func NewXWAL(cfg XWALConfig) (*XWAL, error) {
 	}
 
 	wal.loadBackend()
+	go wal.PeriodicFlush()
 
 	return wal, nil
 }
@@ -39,10 +40,24 @@ func NewXWAL(cfg XWALConfig) (*XWAL, error) {
 func (wal *XWAL) loadBackend() {
 	switch wal.cfg.WALBackend {
 	case types.LocalFileSystemWALBackend:
-		wal.backend = nil
+		wal.backend = localfs.Open()
 	case types.AWSS3WALBackend:
 		wal.backend = nil
 	default:
 		wal.backend = nil
+	}
+}
+
+func (wal *XWAL) PeriodicFlush() {
+	for {
+		select {
+		case <-wal.FlushInterval.C:
+			wal.lock.Lock()
+			wal.backend.Flush()
+			wal.lock.Unlock()
+
+		case <-wal.ctx.Done():
+			return
+		}
 	}
 }
