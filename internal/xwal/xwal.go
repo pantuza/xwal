@@ -30,7 +30,7 @@ func NewXWAL(cfg XWALConfig) (*XWAL, error) {
 		ctx:           ctx,
 		cancel:        cancel,
 		FlushInterval: *time.NewTicker(cfg.FlushFrequency),
-		buffer:        buffer.NewInMemoryBuffer(cfg.BufferSize, cfg.SegmentsSize),
+		buffer:        buffer.NewInMemoryBuffer(cfg.BufferSize, cfg.BufferEntriesLength),
 	}
 
 	wal.loadBackend()
@@ -42,7 +42,7 @@ func NewXWAL(cfg XWALConfig) (*XWAL, error) {
 func (wal *XWAL) loadBackend() {
 	switch wal.cfg.WALBackend {
 	case types.LocalFileSystemWALBackend:
-		wal.backend = localfs.NewLocalFSWALBackend()
+		wal.backend = localfs.NewLocalFSWALBackend(wal.cfg.BackendConfig.(localfs.LocalFSConfig))
 	case types.AWSS3WALBackend:
 		wal.backend = nil
 	default:
