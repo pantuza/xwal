@@ -2,10 +2,12 @@ package xwal
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/pantuza/xwal/internal/buffer"
+	"github.com/pantuza/xwal/pkg/backends/localfs"
 	"github.com/pantuza/xwal/pkg/types"
 )
 
@@ -40,11 +42,15 @@ func NewXWAL(cfg XWALConfig) (*XWAL, error) {
 func (wal *XWAL) loadBackend() {
 	switch wal.cfg.WALBackend {
 	case types.LocalFileSystemWALBackend:
-		wal.backend = localfs.Open()
+		wal.backend = localfs.NewLocalFSWALBackend()
 	case types.AWSS3WALBackend:
 		wal.backend = nil
 	default:
 		wal.backend = nil
+	}
+
+	if err := wal.backend.Open(); err != nil {
+		fmt.Println(err.Error())
 	}
 }
 
