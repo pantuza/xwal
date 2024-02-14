@@ -4,6 +4,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/pantuza/xwal/pkg/backends/localfs"
 	"github.com/pantuza/xwal/pkg/types"
 	"gopkg.in/yaml.v3"
 )
@@ -21,20 +22,17 @@ type XWALConfig struct {
 	// Type of the WAL Backend to be used
 	WALBackend types.WALBackendType `yaml:"walBackend"`
 
-	// Name of the directory where WAL files will be stored
-	DirName string `yaml:"dirName"`
+	// The backend configuration
+	BackendConfig interface{} `yaml:"backendConfig"`
 
 	// Number of segments allowed inside the in memory buffer
 	BufferSize int `yaml:"bufferSize"`
 
+	// Number of entries allowed inside the in memory buffer
+	BufferEntriesLength int `yaml:"bufferEntriesLength"`
+
 	// Frequency that xWAL Flushes data from memory to target WAL Backend
 	FlushFrequency time.Duration `yaml:"flushFrequency"`
-
-	// Size in megabytes of each segment inside files
-	SegmentsSize int `yaml:"segmentSize"`
-
-	// Size in megabytes of each file inside the WAL
-	FileSize int `yaml:"fileSize"`
 }
 
 // Creates a new XWALConfig from yaml file or default values
@@ -56,11 +54,13 @@ func NewXWALConfig(filename string) *XWALConfig {
 func loadDefaultConfigValues() *XWALConfig {
 	return &XWALConfig{
 		WALBackend:     types.LocalFileSystemWALBackend,
-		DirName:        "xwal",
 		BufferSize:     32,
 		FlushFrequency: 1 * time.Second,
-		SegmentsSize:   2,
-		FileSize:       1000,
+		BackendConfig: localfs.LocalFSConfig{
+			DirPath:      "/tmp/xwal",
+			SegmentsSize: 2,
+			FileSize:     1000,
+		},
 	}
 }
 
