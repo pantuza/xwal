@@ -3,12 +3,11 @@ package types
 import "github.com/pantuza/xwal/protobuf/xwalpb"
 
 type WALBackendInterface interface {
-
 	// Open initializes the WAL for reading and writing.
 	Open() error
 
 	// Write appends a new entry to the log.
-	Write(entry xwalpb.WALEntry) error
+	Write(entries []*xwalpb.WALEntry) error
 
 	// Read returns a log entry at a specific index.
 	// If the entry does not exist, an error should be returned.
@@ -25,7 +24,10 @@ type WALBackendInterface interface {
 
 	// LastIndex returns the index of the last entry written to the log.
 	// This can be used to resume operations after a restart.
-	LastIndex() (int64, error)
+	LastIndex() uint32
+
+	// Type returns the type of the WAL backend
+	Type() WALBackendType
 }
 
 type WALBackendType string
