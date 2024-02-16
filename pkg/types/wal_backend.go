@@ -33,6 +33,6 @@ type WALBackendInterface interface {
 type WALBackendType string
 
 const (
-	LocalFileSystemWALBackend = "local_filesystem"
-	AWSS3WALBackend           = "aws_s3"
+	LocalFileSystemWALBackend WALBackendType = "local_filesystem"
+	AWSS3WALBackend           WALBackendType = "aws_s3"
 )
