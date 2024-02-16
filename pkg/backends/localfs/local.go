@@ -18,18 +18,19 @@ const (
 )
 
 type LocalFSConfig struct {
+
 	// Name of the directory where WAL files will be stored
 	DirPath string `yaml:"dirPath"`
 
 	// Size in megabytes of each segment inside files
-	SegmentsSize int `yaml:"segmentSize"`
+	SegmentsSize int `yaml:"segmentsSize"`
 
 	// Size in megabytes of each file inside the WAL
 	FileSize int `yaml:"fileSize"`
 }
 
-type LocalFSBackend struct {
-	cfg LocalFSConfig
+type LocalFSWALBackend struct {
+	cfg *LocalFSConfig
 
 	firstSegmentIndex uint32
 	lastSegmentIndex  uint32
@@ -37,11 +38,11 @@ type LocalFSBackend struct {
 	currentSegmentFile *os.File
 }
 
-func NewLocalFSWALBackend(cfg LocalFSConfig) *LocalFSBackend {
-	return &LocalFSBackend{cfg: cfg, firstSegmentIndex: 0, lastSegmentIndex: 0}
+func NewLocalFSWALBackend(cfg *LocalFSConfig) *LocalFSWALBackend {
+	return &LocalFSWALBackend{cfg: cfg, firstSegmentIndex: 0, lastSegmentIndex: 0}
 }
 
-func (wal *LocalFSBackend) Open() error {
+func (wal *LocalFSWALBackend) Open() error {
 	if err := wal.createWALDir(); err != nil {
 		return err
 	}
@@ -55,18 +56,18 @@ func (wal *LocalFSBackend) Open() error {
 	return nil
 }
 
-func (wal *LocalFSBackend) Type() types.WALBackendType {
+func (wal *LocalFSWALBackend) Type() types.WALBackendType {
 	return types.LocalFileSystemWALBackend
 }
 
-func (wal *LocalFSBackend) createWALDir() error {
+func (wal *LocalFSWALBackend) createWALDir() error {
 	if err := os.MkdirAll(wal.cfg.DirPath, LFSDefaultDirPermission); err != nil {
 		return errors.New(fmt.Sprintf("Error Opening WAL. Check if the directory exists and has the right permissions. Error: %s", err))
 	}
 	return nil
 }
 
-func (wal *LocalFSBackend) extractSegmentsIndexesFromFiles() error {
+func (wal *LocalFSWALBackend) extractSegmentsIndexesFromFiles() error {
 	files, err := os.ReadDir(wal.cfg.DirPath)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Error Opening WAL. Could not read directory entries. Error: %s", err))
@@ -84,7 +85,7 @@ func (wal *LocalFSBackend) extractSegmentsIndexesFromFiles() error {
 	return nil
 }
 
-func (wal *LocalFSBackend) openCurrentSegmentFile() error {
+func (wal *LocalFSWALBackend) openCurrentSegmentFile() error {
 	filename := fmt.Sprintf(LFSWALSegmentFileFormat, wal.lastSegmentIndex)
 
 	if wal.lastSegmentIndex == 0 { // Then, we create the first segment file
@@ -108,14 +109,14 @@ func (wal *LocalFSBackend) openCurrentSegmentFile() error {
 
 // Segments files names format is: wal_00000. The last 5 characters are the index.
 // This function extracts the segment Index.
-func (wal *LocalFSBackend) extractSegmentIndex(filename string) uint32 {
+func (wal *LocalFSWALBackend) extractSegmentIndex(filename string) uint32 {
 	var index uint32
 	fmt.Sscanf(filename, LFSWALSegmentFileFormat, &index)
 	return index
 }
 
 // Write writes the entries to the current segment file.
-func (wal *LocalFSBackend) Write(entries []*xwalpb.WALEntry) error {
+func (wal *LocalFSWALBackend) Write(entries []*xwalpb.WALEntry) error {
 	var buffer []byte
 
 	for _, entry := range entries {
@@ -134,22 +135,22 @@ func (wal *LocalFSBackend) Write(entries []*xwalpb.WALEntry) error {
 	return nil
 }
 
-func (wal *LocalFSBackend) Read(index int64) (xwalpb.WALEntry, error) {
+func (wal *LocalFSWALBackend) Read(index int64) (xwalpb.WALEntry, error) {
 	return xwalpb.WALEntry{}, nil
 }
 
-func (wal *LocalFSBackend) Replay() ([]*xwalpb.WALEntry, error) {
+func (wal *LocalFSWALBackend) Replay() ([]*xwalpb.WALEntry, error) {
 	return nil, nil
 }
 
-func (wal *LocalFSBackend) Flush() error {
+func (wal *LocalFSWALBackend) Flush() error {
 	return nil
 }
 
-func (wal *LocalFSBackend) Close() error {
+func (wal *LocalFSWALBackend) Close() error {
 	return nil
 }
 
-func (wal *LocalFSBackend) LastIndex() uint32 {
+func (wal *LocalFSWALBackend) LastIndex() uint32 {
 	return wal.lastSegmentIndex
 }
