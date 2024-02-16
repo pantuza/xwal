@@ -1,6 +1,7 @@
 package xwal
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -13,6 +14,10 @@ const (
 	XWALConfigDefaultFile = "xwal.yaml"
 )
 
+type WALBackendsConfigs struct {
+	LocalFS *localfs.LocalFSConfig `yaml:"localfs,omitempty"`
+}
+
 // The configuration of the xWAL. It will drive how the xWAL will use
 // any WAL Backend implementation
 type XWALConfig struct {
@@ -23,7 +28,7 @@ type XWALConfig struct {
 	WALBackend types.WALBackendType `yaml:"walBackend"`
 
 	// The backend configuration
-	BackendConfig interface{} `yaml:"backendConfig"`
+	BackendConfig WALBackendsConfigs `yaml:"backends"`
 
 	// Number of segments allowed inside the in memory buffer
 	BufferSize int `yaml:"bufferSize"`
@@ -37,7 +42,7 @@ type XWALConfig struct {
 
 // Creates a new XWALConfig from yaml file or default values
 func NewXWALConfig(filename string) *XWALConfig {
-	if filename != "" {
+	if filename == "" {
 		filename = XWALConfigDefaultFile
 	}
 
@@ -56,27 +61,31 @@ func loadDefaultConfigValues() *XWALConfig {
 		WALBackend:     types.LocalFileSystemWALBackend,
 		BufferSize:     32,
 		FlushFrequency: 1 * time.Second,
-		BackendConfig: localfs.LocalFSConfig{
-			DirPath:      "/tmp/xwal",
-			SegmentsSize: 2,
-			FileSize:     1000,
+		BackendConfig: WALBackendsConfigs{
+			LocalFS: &localfs.LocalFSConfig{
+				DirPath:      "/tmp/xwal",
+				SegmentsSize: 2,
+				FileSize:     1000,
+			},
 		},
 	}
 }
 
 // Loads configuration from a YAML file. It applies default values for missing options.
 func loadConfigFromFile(filename string) (*XWALConfig, error) {
-	config := loadDefaultConfigValues()
+	var config XWALConfig // loadDefaultConfigValues()
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		// TODO: Log to stdout we couldn't READ the config file return config, nil
+		fmt.Println(err)
+		return nil, err
 	}
 
-	if err := yaml.Unmarshal(data, config); err != nil {
+	if err := yaml.Unmarshal(data, &config); err != nil {
 		// TODO: Log to stdout we couldn't Unmarshal the config file return config, nil
 		return nil, err
 	}
 
-	return config, nil
+	return &config, nil
 }
