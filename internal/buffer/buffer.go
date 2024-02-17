@@ -25,7 +25,7 @@ func NewInMemoryBuffer(bufferSizeInMB, nEntries int) *InMemoryBuffer {
 		NumberOfEntries: nEntries,
 		WritesCounter:   0,
 		MBCounter:       0,
-		Buffer:          make([]*xwalpb.WALEntry, nEntries, nEntries),
+		Buffer:          make([]*xwalpb.WALEntry, 0, nEntries),
 	}
 }
 
@@ -44,7 +44,7 @@ func (b *InMemoryBuffer) Write(entry *xwalpb.WALEntry) error {
 }
 
 func (b *InMemoryBuffer) Flush() []*xwalpb.WALEntry {
-	data := make([]*xwalpb.WALEntry, b.WritesCounter, b.WritesCounter)
+	data := make([]*xwalpb.WALEntry, 0, b.WritesCounter)
 	copy(data, b.Buffer)
 
 	b.Reset()
@@ -54,5 +54,5 @@ func (b *InMemoryBuffer) Flush() []*xwalpb.WALEntry {
 func (b *InMemoryBuffer) Reset() {
 	b.WritesCounter = 0
 	b.MBCounter = 0
-	b.Buffer = make([]*xwalpb.WALEntry, b.NumberOfEntries, b.NumberOfEntries)
+	b.Buffer = make([]*xwalpb.WALEntry, 0, b.NumberOfEntries)
 }
