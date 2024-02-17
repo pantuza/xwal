@@ -1,14 +1,16 @@
 package localfs
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -117,18 +119,30 @@ func (wal *LocalFSWALBackend) extractSegmentIndex(filename string) uint32 {
 
 // Write writes the entries to the current segment file.
 func (wal *LocalFSWALBackend) Write(entries []*xwalpb.WALEntry) error {
-	var buffer []byte
+
+	// Initialize a bytes buffer to accumulate the serialized data
+	var buffer bytes.Buffer
 
 	for _, entry := range entries {
+
 		data, err := proto.Marshal(entry)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Error Marshaling entries before writing to segment file. Error: %s", err))
 		}
 
-		buffer = append(buffer, data...)
+		// Encode the length of the entry data as a varint and write it to the buffer
+		lenBuf := proto.EncodeVarint(uint64(len(data)))
+		if _, err := buffer.Write(lenBuf); err != nil {
+			return errors.New(fmt.Sprintf("Error encoding entry length before writing to segment file. Error: %s", err))
+		}
+
+		// Write the entry data to the buffer
+		if _, err := buffer.Write(data); err != nil {
+			return errors.New(fmt.Sprintf("Error writing serialized entry as bytes before writing to segment file. Error: %s", err))
+		}
 	}
 
-	if _, err := wal.currentSegmentFile.Write(buffer); err != nil {
+	if _, err := buffer.WriteTo(wal.currentSegmentFile); err != nil {
 		return errors.New(fmt.Sprintf("Error writing all entries to segment file. Error: %s", err))
 	}
 
