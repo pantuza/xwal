@@ -10,30 +10,37 @@ help:  ## Displays help message
 
 .PHONY: protobuf
 protobuf: ./scripts/compile_protocol_buffers.sh ## Compile Protocol Buffers files
+	$(info Building protocol buffers..)
 	@. $^
 
 .PHONY: tidy
 tidy: go.mod ## Runs go mod tidy on the project
+	$(info Tidying project dependencies..)
 	@go mod tidy
 
 .PHONY: run
 run: cmd/xwal/main.go ## Runs the library executable
+	$(info Running library binary..)
 	@go run $^
 
 .PHONY: test
 test: ## Runs the library tests
+	$(info Running project tests..)
 	@go clean -testcache
 	@go test -race ./...
 
 .PHONY: lint
 lint: ## Runs the Golang Linter
+	$(info Linting source code..)
 	@golangci-lint run
 
 .PHONY: setup
 setup: ./scripts/local_setup.sh ## Sets up the local machine with OS level tools and dependencies
+	$(info Setting up local development environment..)
 	@. $^
 
 
 .PHONY: build
 build: cmd/xwal/main.go ## Builds a library binary
+	$(info Building xWAL project..)
 	@go build -race -o bin/xwal $^
