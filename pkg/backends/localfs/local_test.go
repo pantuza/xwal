@@ -1,15 +1,17 @@
 package localfs
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/encoding/protodelim"
+	"google.golang.org/protobuf/proto"
 )
 
 func setupLocalFSWALBackend() (*LocalFSWALBackend, string) {
@@ -35,7 +37,6 @@ func setupLocalFSWALBackend() (*LocalFSWALBackend, string) {
 }
 
 func TestOpen(t *testing.T) {
-
 	wal, dir := setupLocalFSWALBackend()
 
 	// Test opening the WAL.
@@ -68,7 +69,7 @@ func TestWrite(t *testing.T) {
 	marshalledData, err := proto.Marshal(entry)
 	assert.NoError(t, err)
 
-	//expected := len(lenBuf) + len(marshalledData)
+	// expected := len(lenBuf) + len(marshalledData)
 	// lenBuf := proto.EncodeVarint(uint64(len(marshalledData)))
 
 	filename := fmt.Sprintf(LFSWALSegmentFileFormat, 0) // Since it's the first and only entry, index should be 0.
@@ -76,8 +77,12 @@ func TestWrite(t *testing.T) {
 	data, err := os.ReadFile(filepath)
 	assert.NoError(t, err)
 
-	_, n := proto.DecodeVarint(data)
-	data = data[n:]
+	entryFromFile := new(xwalpb.WALEntry)
+	err = protodelim.UnmarshalFrom(bytes.NewBuffer(data), entryFromFile)
+	assert.NoError(t, err)
 
-	assert.Equal(t, marshalledData, data, "The data written to the file should match the expected entry data.")
+	marshalledFromFile, err := proto.Marshal(entryFromFile)
+	assert.NoError(t, err)
+
+	assert.Equal(t, marshalledData, marshalledFromFile, "The data written to the file should match the expected entry data.")
 }
