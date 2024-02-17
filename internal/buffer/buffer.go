@@ -3,8 +3,8 @@ package buffer
 import (
 	"errors"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -30,7 +30,6 @@ func NewInMemoryBuffer(bufferSizeInMB, nEntries int) *InMemoryBuffer {
 }
 
 func (b *InMemoryBuffer) Write(entry *xwalpb.WALEntry) error {
-
 	entry_size := proto.Size(entry) / 1024 / 1024
 
 	if b.MBCounter+entry_size > b.MaxBufferSizeMB || b.WritesCounter >= b.NumberOfEntries {
@@ -45,7 +44,6 @@ func (b *InMemoryBuffer) Write(entry *xwalpb.WALEntry) error {
 }
 
 func (b *InMemoryBuffer) Flush() []*xwalpb.WALEntry {
-
 	data := make([]*xwalpb.WALEntry, b.WritesCounter, b.WritesCounter)
 	copy(data, b.Buffer)
 

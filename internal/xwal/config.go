@@ -7,7 +7,7 @@ import (
 
 	"github.com/pantuza/xwal/pkg/backends/localfs"
 	"github.com/pantuza/xwal/pkg/types"
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 const (
