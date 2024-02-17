@@ -13,7 +13,7 @@ jobs:
         with:
           go-version: "1.22.x"
       - name: Install dependencies
-        run: go get .
+        run: make tidy
       - name: Build
         run: make build
       - name: Test with the Go CLI
