@@ -154,7 +154,84 @@ func (wal *LocalFSWALBackend) Read(index int64) (xwalpb.WALEntry, error) {
 }
 
 func (wal *LocalFSWALBackend) Replay() ([]*xwalpb.WALEntry, error) {
-	return nil, nil
+
+	var entries []*xwalpb.WALEntry
+
+	segmentsFiles, err := wal.getSegmentsFilesFromRange(wal.firstSegmentIndex, wal.lastSegmentIndex)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Error getting segment files from range. Error: %s", err))
+	}
+
+	for _, segmentFile := range segmentsFiles {
+
+		file, err := os.Open(segmentFile)
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("Error opening segment file '%s' for replay. Error: %s", segmentFile, err))
+
+		}
+		readedEntries, err := wal.readEntriesFromFile(file)
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("Error reading entries from segment file '%s' for replay. Error: %s", segmentFile, err))
+		}
+		file.Close()
+
+		// Append the current readed entries to the slice of entries
+		entries = append(entries, readedEntries...)
+	}
+
+	return entries, nil
+}
+
+func (wal *LocalFSWALBackend) getSegmentsFilesFromRange(start, end uint32) ([]string, error) {
+
+	var files []string
+	for i := start; i <= end; i++ {
+		files = append(files, filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
+	}
+
+	if len(files) == 0 {
+		return nil, errors.New(fmt.Sprintf("No segment files found in the range from %d to %d", start, end))
+	}
+
+	return files, nil
+}
+
+// Reads entries from a file into a slice of WALEntry.
+func (wal *LocalFSWALBackend) readEntriesFromFile(file *os.File) ([]*xwalpb.WALEntry, error) {
+
+	var entries []*xwalpb.WALEntry
+
+	fileData, err := ioutil.ReadAll(file)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Error reading segment file. Error: %s", err))
+	}
+
+	for len(fileData) > 0 {
+		// Decode the length of the next entry (varint).
+		len64, n := proto.DecodeVarint(fileData)
+		if n <= 0 {
+			return nil, errors.New(fmt.Sprintf("Error reading entry length from segment file. Error: %s", err))
+		}
+		fileData = fileData[n:] // Advance past the varint
+
+		if len(fileData) < int(len64) {
+			return nil, errors.New(fmt.Sprintf("Error reading entry data from segment file. Error: remaining file size should not be smaller than entry length: %d < %d", len(fileData), int(len64)))
+		}
+
+		// Deserialize the entry.
+		entryData := fileData[:len64]
+		entry := &xwalpb.WALEntry{}
+		if err := proto.Unmarshal(entryData, entry); err != nil {
+			return nil, errors.New(fmt.Sprintf("Error unmarshaling entry from segment file. Error: %s", err))
+		}
+
+		entries = append(entries, entry)
+
+		// Advance the slice past this entry's data for the next iteration.
+		fileData = fileData[len64:]
+	}
+
+	return entries, nil
 }
 
 func (wal *LocalFSWALBackend) Flush() error {
