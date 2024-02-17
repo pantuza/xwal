@@ -1,10 +1,9 @@
 module github.com/pantuza/xwal
 
-go 1.17
+go 1.22
 
 require (
 	github.com/davecgh/go-spew v1.1.1
-	github.com/golang/protobuf v1.5.0
 	github.com/stretchr/testify v1.8.4
 	google.golang.org/protobuf v1.32.0
 	gopkg.in/yaml.v3 v3.0.1
