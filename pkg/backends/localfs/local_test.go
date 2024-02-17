@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/protobuf/proto"
 )
 
 func setupLocalFSWALBackend() (*LocalFSWALBackend, string) {
@@ -58,7 +58,6 @@ func TestWrite(t *testing.T) {
 		Data: []byte("test data"),
 		CRC:  1,
 	}
-
 	entries := []*xwalpb.WALEntry{entry}
 
 	// Test writing the entry to WAL.
@@ -66,12 +65,19 @@ func TestWrite(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify the entry was written correctly.
-	expected, err := proto.Marshal(entry)
+	marshalledData, err := proto.Marshal(entry)
 	assert.NoError(t, err)
+
+	//expected := len(lenBuf) + len(marshalledData)
+	// lenBuf := proto.EncodeVarint(uint64(len(marshalledData)))
 
 	filename := fmt.Sprintf(LFSWALSegmentFileFormat, 0) // Since it's the first and only entry, index should be 0.
 	filepath := filepath.Join(dir, filename)
 	data, err := os.ReadFile(filepath)
 	assert.NoError(t, err)
-	assert.Equal(t, expected, data[:len(expected)], "The data written to the file should match the expected entry data.")
+
+	_, n := proto.DecodeVarint(data)
+	data = data[n:]
+
+	assert.Equal(t, marshalledData, data, "The data written to the file should match the expected entry data.")
 }
