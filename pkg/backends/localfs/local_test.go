@@ -3,7 +3,6 @@ package localfs
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,7 +15,7 @@ import (
 
 func setupLocalFSWALBackend() (*LocalFSWALBackend, string) {
 	// Create a temporary directory for WAL files.
-	dir, err := ioutil.TempDir("", "wal_test")
+	dir, err := os.MkdirTemp("", "wal_test")
 	if err != nil {
 		panic(err)
 	}

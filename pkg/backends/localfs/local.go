@@ -3,7 +3,7 @@ package localfs
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -181,7 +181,7 @@ func (wal *LocalFSWALBackend) getSegmentsFilesFromRange(start, end uint32) ([]st
 func (wal *LocalFSWALBackend) readEntriesFromFile(file *os.File) ([]*xwalpb.WALEntry, error) {
 	var entries []*xwalpb.WALEntry
 
-	fileData, err := ioutil.ReadAll(file)
+	fileData, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("Error reading segment file. Error: %s", err)
 	}
