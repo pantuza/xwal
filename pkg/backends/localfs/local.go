@@ -2,15 +2,14 @@ package localfs
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
+	"google.golang.org/protobuf/encoding/protodelim"
 )
 
 const (
@@ -20,7 +19,6 @@ const (
 )
 
 type LocalFSConfig struct {
-
 	// Name of the directory where WAL files will be stored
 	DirPath string `yaml:"dirPath"`
 
@@ -64,7 +62,7 @@ func (wal *LocalFSWALBackend) Type() types.WALBackendType {
 
 func (wal *LocalFSWALBackend) createWALDir() error {
 	if err := os.MkdirAll(wal.cfg.DirPath, LFSDefaultDirPermission); err != nil {
-		return errors.New(fmt.Sprintf("Error Opening WAL. Check if the directory exists and has the right permissions. Error: %s", err))
+		return fmt.Errorf("Error Opening WAL. Check if the directory exists and has the right permissions. Error: %s", err)
 	}
 	return nil
 }
@@ -72,7 +70,7 @@ func (wal *LocalFSWALBackend) createWALDir() error {
 func (wal *LocalFSWALBackend) extractSegmentsIndexesFromFiles() error {
 	files, err := os.ReadDir(wal.cfg.DirPath)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Error Opening WAL. Could not read directory entries. Error: %s", err))
+		return fmt.Errorf("Error Opening WAL. Could not read directory entries. Error: %s", err)
 	}
 
 	for _, file := range files {
@@ -94,14 +92,14 @@ func (wal *LocalFSWALBackend) openCurrentSegmentFile() error {
 
 		file, err := os.Create(filepath.Join(wal.cfg.DirPath, filename))
 		if err != nil {
-			return errors.New(fmt.Sprintf("Error creating the current Segment File '%s'. Error: %s", filename, err))
+			return fmt.Errorf("Error creating the current Segment File '%s'. Error: %s", filename, err)
 		}
 		wal.currentSegmentFile = file
 
 	} else { // We open the last segment file
 		file, err := os.OpenFile(filepath.Join(wal.cfg.DirPath, filename), os.O_APPEND|os.O_WRONLY, LFSDefaultDirPermission)
 		if err != nil {
-			return errors.New(fmt.Sprintf("Error opening the current Segment File '%s'. Error: %s", filename, err))
+			return fmt.Errorf("Error opening the current Segment File '%s'. Error: %s", filename, err)
 		}
 		wal.currentSegmentFile = file
 	}
@@ -154,24 +152,22 @@ func (wal *LocalFSWALBackend) Read(index int64) (xwalpb.WALEntry, error) {
 }
 
 func (wal *LocalFSWALBackend) Replay() ([]*xwalpb.WALEntry, error) {
-
 	var entries []*xwalpb.WALEntry
 
 	segmentsFiles, err := wal.getSegmentsFilesFromRange(wal.firstSegmentIndex, wal.lastSegmentIndex)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error getting segment files from range. Error: %s", err))
+		return nil, fmt.Errorf("Error getting segment files from range. Error: %s", err)
 	}
 
 	for _, segmentFile := range segmentsFiles {
 
 		file, err := os.Open(segmentFile)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Error opening segment file '%s' for replay. Error: %s", segmentFile, err))
-
+			return nil, fmt.Errorf("Error opening segment file '%s' for replay. Error: %s", segmentFile, err)
 		}
 		readedEntries, err := wal.readEntriesFromFile(file)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Error reading entries from segment file '%s' for replay. Error: %s", segmentFile, err))
+			return nil, fmt.Errorf("Error reading entries from segment file '%s' for replay. Error: %s", segmentFile, err)
 		}
 		file.Close()
 
@@ -183,14 +179,13 @@ func (wal *LocalFSWALBackend) Replay() ([]*xwalpb.WALEntry, error) {
 }
 
 func (wal *LocalFSWALBackend) getSegmentsFilesFromRange(start, end uint32) ([]string, error) {
-
 	var files []string
 	for i := start; i <= end; i++ {
 		files = append(files, filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
 	}
 
 	if len(files) == 0 {
-		return nil, errors.New(fmt.Sprintf("No segment files found in the range from %d to %d", start, end))
+		return nil, fmt.Errorf("No segment files found in the range from %d to %d", start, end)
 	}
 
 	return files, nil
