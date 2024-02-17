@@ -32,3 +32,8 @@ lint: ## Runs the Golang Linter
 .PHONY: setup
 setup: ./scripts/local_setup.sh ## Sets up the local machine with OS level tools and dependencies
 	@. $^
+
+
+.PHONY: build
+build: cmd/xwal/main.go ## Builds a library binary
+	@go build -race -o bin/xwal $^
