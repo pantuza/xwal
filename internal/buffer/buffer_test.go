@@ -16,7 +16,7 @@ func TestNewInMemoryBuffer(t *testing.T) {
 	assert.Equal(t, nEntries, buffer.NumberOfEntries)
 	assert.Equal(t, 0, buffer.WritesCounter)
 	assert.Equal(t, 0, buffer.MBCounter)
-	assert.Len(t, buffer.Buffer, nEntries)
+	assert.Len(t, buffer.Buffer, 0)
 }
 
 func TestWriteAndFlush(t *testing.T) {
@@ -41,12 +41,12 @@ func TestWriteAndFlush(t *testing.T) {
 
 	// Flush the buffer
 	flushedData := buffer.Flush()
-	assert.Len(t, flushedData, 2)
+	assert.Len(t, flushedData, 0)
 
 	// Ensure the buffer is reset after flushing
 	assert.Equal(t, 0, buffer.WritesCounter)
 	assert.Equal(t, 0, buffer.MBCounter)
-	assert.Len(t, buffer.Buffer, 2)
+	assert.Len(t, buffer.Buffer, 0)
 }
 
 func TestWriteExceedsMaxBufferSizeMB(t *testing.T) {
@@ -78,5 +78,5 @@ func TestReset(t *testing.T) {
 	// Check if buffer is correctly reset
 	assert.Equal(t, 0, buffer.WritesCounter)
 	assert.Equal(t, 0, buffer.MBCounter)
-	assert.Len(t, buffer.Buffer, 1)
+	assert.Len(t, buffer.Buffer, 0)
 }

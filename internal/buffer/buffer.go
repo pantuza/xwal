@@ -36,7 +36,7 @@ func (b *InMemoryBuffer) Write(entry *xwalpb.WALEntry) error {
 		return errors.New(ErrorShouldFlushBuffer)
 	}
 
-	b.Buffer[b.WritesCounter] = entry
+	b.Buffer = append(b.Buffer, entry)
 	b.WritesCounter++
 	b.MBCounter += entry_size
 
