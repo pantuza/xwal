@@ -1,8 +1,10 @@
 package buffer
 
 import (
-	"bytes"
 	"errors"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/pantuza/xwal/protobuf/xwalpb"
 )
 
 const (
@@ -10,32 +12,49 @@ const (
 )
 
 type InMemoryBuffer struct {
-	BufferSizeMB    int
+	MaxBufferSizeMB int
 	NumberOfEntries int
 	WritesCounter   int
-	Buffer          bytes.Buffer
+	MBCounter       int
+	Buffer          []*xwalpb.WALEntry
 }
 
 func NewInMemoryBuffer(bufferSizeInMB, nEntries int) *InMemoryBuffer {
 	return &InMemoryBuffer{
-		BufferSizeMB:    bufferSizeInMB,
+		MaxBufferSizeMB: bufferSizeInMB,
 		NumberOfEntries: nEntries,
 		WritesCounter:   0,
-		Buffer:          bytes.Buffer{},
+		MBCounter:       0,
+		Buffer:          make([]*xwalpb.WALEntry, nEntries, nEntries),
 	}
 }
 
-func (b *InMemoryBuffer) Write(p []byte) (n int, err error) {
-	if b.Buffer.Len() > b.BufferSizeMB || b.WritesCounter > b.NumberOfEntries {
-		return 0, errors.New(ErrorShouldFlushBuffer)
+func (b *InMemoryBuffer) Write(entry *xwalpb.WALEntry) error {
+
+	entry_size := proto.Size(entry) / 1024 / 1024
+
+	if b.MBCounter+entry_size > b.MaxBufferSizeMB || b.WritesCounter >= b.NumberOfEntries {
+		return errors.New(ErrorShouldFlushBuffer)
 	}
 
-	return b.Buffer.Write(p)
+	b.Buffer[b.WritesCounter] = entry
+	b.WritesCounter++
+	b.MBCounter += entry_size
+
+	return nil
 }
 
-func (b *InMemoryBuffer) Flush() []byte {
-	data := b.Buffer.Bytes()
-	b.Buffer.Reset()
+func (b *InMemoryBuffer) Flush() []*xwalpb.WALEntry {
 
+	data := make([]*xwalpb.WALEntry, b.WritesCounter, b.WritesCounter)
+	copy(data, b.Buffer)
+
+	b.Reset()
 	return data
+}
+
+func (b *InMemoryBuffer) Reset() {
+	b.WritesCounter = 0
+	b.MBCounter = 0
+	b.Buffer = make([]*xwalpb.WALEntry, b.NumberOfEntries, b.NumberOfEntries)
 }
