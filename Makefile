@@ -23,7 +23,7 @@ run: cmd/xwal/main.go ## Runs the library executable
 .PHONY: test
 test: ## Runs the library tests
 	@go clean -testcache
-	@go test ./...
+	@go test -race ./...
 
 .PHONY: lint
 lint: ## Runs the Golang Linter
