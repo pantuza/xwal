@@ -1,6 +1,15 @@
 
 PROJECT := xWAL
 
+# Colors
+GREEN := \033[0;32m
+RED := \033[0;31m
+CRST := \033[0m
+
+OK := "$(GREEN)OK$(CRST)"
+NOK := "$(RED)OK$(CRST)"
+
+
 .DEFAULT := help
 
 .PHONY: help
@@ -10,13 +19,12 @@ help:  ## Displays help message
 
 .PHONY: protobuf
 protobuf: ./scripts/compile_protocol_buffers.sh ## Compile Protocol Buffers files
-	$(info Building protocol buffers..)
 	@. $^
 
 .PHONY: tidy
 tidy: go.mod ## Runs go mod tidy on the project
 	$(info Tidying project dependencies..)
-	@go mod tidy
+	@go mod tidy && echo $(OK) || echo $(NOK)
 
 .PHONY: run
 run: cmd/xwal/main.go ## Runs the library executable
@@ -27,20 +35,20 @@ run: cmd/xwal/main.go ## Runs the library executable
 test: ## Runs the library tests
 	$(info Running project tests..)
 	@go clean -testcache
-	@go test -race ./...
+	@go test -race ./... && echo $(OK) || echo $(NOK)
 
 .PHONY: lint
 lint: ## Runs the Golang Linter
 	$(info Linting source code..)
-	@golangci-lint run
+	@golangci-lint run && echo $(OK) || echo $(NOK)
 
 .PHONY: setup
 setup: ./scripts/local_setup.sh ## Sets up the local machine with OS level tools and dependencies
 	$(info Setting up local development environment..)
-	@. $^
+	@. $^ && echo $(OK) || echo $(NOK)
 
 
 .PHONY: build
 build: cmd/xwal/main.go ## Builds a library binary
 	$(info Building xWAL project..)
-	@go build -race -o bin/xwal $^
+	@go build -race -o bin/xwal $^ && echo $(OK) || echo $(NOK)
