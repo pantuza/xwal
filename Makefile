@@ -1,13 +1,8 @@
 
 PROJECT := xWAL
 
-# Colors
-GREEN := \033[0;32m
-RED := \033[0;31m
-CRST := \033[0m
-
-OK := "$(GREEN)OK$(CRST)"
-NOK := "$(RED)OK$(CRST)"
+OK := "✅"
+NOK := "❌"
 
 
 .DEFAULT := help
