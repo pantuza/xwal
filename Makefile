@@ -30,7 +30,8 @@ run: cmd/xwal/main.go ## Runs the library executable
 test: ## Runs the library tests
 	$(info Running project tests..)
 	@go clean -testcache
-	@go test -race ./... && echo $(OK) || echo $(NOK)
+	# TODO: Run benchmark in a separated CI Step
+	@go test -race -bench=. -count 3 ./... && echo $(OK) || echo $(NOK)
 
 .PHONY: lint
 lint: ## Runs the Golang Linter
