@@ -12,25 +12,25 @@ const (
 )
 
 type InMemoryBuffer struct {
-	MaxBufferSizeMB int
+	MaxBufferSizeMB float64
 	NumberOfEntries int
 	WritesCounter   int
-	MBCounter       int
+	MBCounter       float64
 	Buffer          []*xwalpb.WALEntry
 }
 
-func NewInMemoryBuffer(bufferSizeInMB, nEntries int) *InMemoryBuffer {
+func NewInMemoryBuffer(bufferSizeInMB float64, nEntries int) *InMemoryBuffer {
 	return &InMemoryBuffer{
 		MaxBufferSizeMB: bufferSizeInMB,
 		NumberOfEntries: nEntries,
 		WritesCounter:   0,
-		MBCounter:       0,
+		MBCounter:       0.0,
 		Buffer:          make([]*xwalpb.WALEntry, 0, nEntries),
 	}
 }
 
 func (b *InMemoryBuffer) Write(entry *xwalpb.WALEntry) error {
-	entry_size := proto.Size(entry) / 1024 / 1024
+	entry_size := float64(proto.Size(entry)) / 1024 / 1024
 
 	if b.MBCounter+entry_size > b.MaxBufferSizeMB || b.WritesCounter >= b.NumberOfEntries {
 		return errors.New(ErrorShouldFlushBuffer)
@@ -45,7 +45,7 @@ func (b *InMemoryBuffer) Write(entry *xwalpb.WALEntry) error {
 
 func (b *InMemoryBuffer) Flush() []*xwalpb.WALEntry {
 	data := make([]*xwalpb.WALEntry, 0, b.WritesCounter)
-	copy(data, b.Buffer)
+	data = append(data, b.Buffer...)
 
 	b.Reset()
 	return data
