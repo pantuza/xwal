@@ -18,7 +18,7 @@ func TestNewXWALConfigDefaults(t *testing.T) {
 
 	// Assert default values
 	assert.Equal(t, types.LocalFileSystemWALBackend, config.WALBackend)
-	assert.Equal(t, 32, config.BufferSize)
+	assert.Equal(t, 32.0, config.BufferSize)
 	assert.Equal(t, 1*time.Second, config.FlushFrequency)
 	assert.IsType(t, &localfs.LocalFSConfig{}, config.BackendConfig.LocalFS)
 
@@ -55,7 +55,7 @@ backends:
 	config := NewXWALConfig(tmpFile.Name())
 
 	// Assert values loaded from file
-	assert.Equal(t, 64, config.BufferSize)
+	assert.Equal(t, 64.0, config.BufferSize)
 	assert.Equal(t, 100, config.BufferEntriesLength)
 	assert.Equal(t, 2*time.Second, config.FlushFrequency)
 
