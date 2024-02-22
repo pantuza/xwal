@@ -91,6 +91,6 @@ func BenchmarkWrite(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		buffer.Write(entry)
+		_ = buffer.Write(entry)
 	}
 }
