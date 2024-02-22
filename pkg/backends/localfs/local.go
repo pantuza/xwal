@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	LFSDefaultDirPermission = 0644
+	LFSDefaultDirPermission = 0744
 
 	LFSWALSegmentFileFormat = "wal_%05d"
 )
