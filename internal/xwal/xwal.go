@@ -13,7 +13,7 @@ import (
 )
 
 type XWAL struct {
-	cfg           XWALConfig
+	cfg           *XWALConfig
 	lock          sync.RWMutex
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -22,7 +22,7 @@ type XWAL struct {
 	backend       types.WALBackendInterface
 }
 
-func NewXWAL(cfg XWALConfig) (*XWAL, error) {
+func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	wal := &XWAL{
@@ -72,7 +72,6 @@ func (wal *XWAL) PeriodicFlush() {
 }
 
 func (wal *XWAL) Write(entry *xwalpb.WALEntry) error {
-
 	wal.lock.Lock()
 	defer wal.lock.Unlock()
 
@@ -84,7 +83,6 @@ func (wal *XWAL) WriteBatch(entries []*xwalpb.WALEntry) error {
 	defer wal.lock.Unlock()
 
 	for _, entry := range entries {
-
 		if err := wal.writeOrFlush(entry); err != nil {
 			return err
 		}
@@ -94,18 +92,21 @@ func (wal *XWAL) WriteBatch(entries []*xwalpb.WALEntry) error {
 }
 
 func (wal *XWAL) writeOrFlush(entry *xwalpb.WALEntry) error {
-
 	// If the buffer is full, flush it
-	if err := wal.buffer.Write(entry); err.Error() == buffer.ErrorShouldFlushBuffer {
+	if err := wal.buffer.Write(entry); err != nil {
+		if err.Error() == buffer.ErrorShouldFlushBuffer {
+			fmt.Println("Flushing buffer")
+			// Flushes the In Memory Buffer and Writes to the WAL Backend
+			if err := wal.flushToBackend(); err != nil {
+				return err
+			}
 
-		// Flushes the In Memory Buffer and Writes to the WAL Backend
-		if err := wal.flushToBackend(); err != nil {
+			// Writes the current entry
+			if err := wal.buffer.Write(entry); err != nil {
+				return err // If we fail again, it seems we indeed have a problem
+			}
+		} else {
 			return err
-		}
-
-		// Writes the current entry
-		if err := wal.buffer.Write(entry); err != nil {
-			return err // If we fail again, it seems we indeed have a problem
 		}
 	}
 
@@ -113,16 +114,15 @@ func (wal *XWAL) writeOrFlush(entry *xwalpb.WALEntry) error {
 }
 
 func (wal *XWAL) flushToBackend() error {
-
 	// Flushes the In Memory Buffer and Writes to the WAL Backend
 	entriesToPersist := wal.buffer.Flush()
 
-	// Asynchronously writes to the backend
-	go func() {
-		if err := wal.backend.Write(entriesToPersist); err != nil {
-			fmt.Println(err) // TODO: Log error properly
-		}
-	}()
+	// TODO: Asynchronously writes to the backend
+	// go func() {
+	if err := wal.backend.Write(entriesToPersist); err != nil {
+		fmt.Println(err) // TODO: Log error properly
+	}
+	// }()
 
 	return nil
 }
