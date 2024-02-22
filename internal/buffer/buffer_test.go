@@ -8,14 +8,14 @@ import (
 )
 
 func TestNewInMemoryBuffer(t *testing.T) {
-	bufferSizeInMB := 1
+	bufferSizeInMB := 1.0
 	nEntries := 10
 	buffer := NewInMemoryBuffer(bufferSizeInMB, nEntries)
 
 	assert.Equal(t, bufferSizeInMB, buffer.MaxBufferSizeMB)
 	assert.Equal(t, nEntries, buffer.NumberOfEntries)
 	assert.Equal(t, 0, buffer.WritesCounter)
-	assert.Equal(t, 0, buffer.MBCounter)
+	assert.Equal(t, 0.0, buffer.MBCounter)
 	assert.Len(t, buffer.Buffer, 0)
 }
 
@@ -41,11 +41,11 @@ func TestWriteAndFlush(t *testing.T) {
 
 	// Flush the buffer
 	flushedData := buffer.Flush()
-	assert.Len(t, flushedData, 0)
+	assert.Len(t, flushedData, 2)
 
 	// Ensure the buffer is reset after flushing
 	assert.Equal(t, 0, buffer.WritesCounter)
-	assert.Equal(t, 0, buffer.MBCounter)
+	assert.Equal(t, 0.0, buffer.MBCounter)
 	assert.Len(t, buffer.Buffer, 0)
 }
 
@@ -77,6 +77,20 @@ func TestReset(t *testing.T) {
 
 	// Check if buffer is correctly reset
 	assert.Equal(t, 0, buffer.WritesCounter)
-	assert.Equal(t, 0, buffer.MBCounter)
+	assert.Equal(t, 0.0, buffer.MBCounter)
 	assert.Len(t, buffer.Buffer, 0)
+}
+
+func BenchmarkWrite(b *testing.B) {
+	buffer := NewInMemoryBuffer(1, 1000) // 1 MB buffer size, can hold 1000 entries
+
+	entry := &xwalpb.WALEntry{
+		LSN:  1,
+		Data: []byte("test data"),
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buffer.Write(entry)
+	}
 }
