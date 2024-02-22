@@ -31,7 +31,7 @@ type XWALConfig struct {
 	BackendConfig WALBackendsConfigs `yaml:"backends"`
 
 	// Number of segments allowed inside the in memory buffer
-	BufferSize int `yaml:"bufferSize"`
+	BufferSize float64 `yaml:"bufferSize"`
 
 	// Number of entries allowed inside the in memory buffer
 	BufferEntriesLength int `yaml:"bufferEntriesLength"`
@@ -58,9 +58,10 @@ func NewXWALConfig(filename string) *XWALConfig {
 
 func loadDefaultConfigValues() *XWALConfig {
 	return &XWALConfig{
-		WALBackend:     types.LocalFileSystemWALBackend,
-		BufferSize:     32,
-		FlushFrequency: 1 * time.Second,
+		WALBackend:          types.LocalFileSystemWALBackend,
+		BufferSize:          32,
+		BufferEntriesLength: 10,
+		FlushFrequency:      1 * time.Second,
 		BackendConfig: WALBackendsConfigs{
 			LocalFS: &localfs.LocalFSConfig{
 				DirPath:      "/tmp/xwal",
