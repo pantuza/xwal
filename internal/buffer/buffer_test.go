@@ -80,17 +80,3 @@ func TestReset(t *testing.T) {
 	assert.Equal(t, 0.0, buffer.MBCounter)
 	assert.Len(t, buffer.Buffer, 0)
 }
-
-func BenchmarkWrite(b *testing.B) {
-	buffer := NewInMemoryBuffer(1, 1000) // 1 MB buffer size, can hold 1000 entries
-
-	entry := &xwalpb.WALEntry{
-		LSN:  1,
-		Data: []byte("test data"),
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = buffer.Write(entry)
-	}
-}
