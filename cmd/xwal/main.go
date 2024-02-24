@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/pantuza/xwal/internal/xwal"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 )
@@ -23,12 +24,22 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer xwal.Close()
 
 	for i := 0; i < 12; i++ {
 		fmt.Printf("Writing entry %d\n", i)
 		if err := xwal.Write(entry); err != nil {
 			panic(err)
 		}
+	}
+
+	entries, err := xwal.Replay()
+	if err != nil {
+		panic(err)
+	}
+
+	for _, entry := range entries {
+		spew.Dump(entry)
 	}
 
 	// spew.Dump(xwal)
