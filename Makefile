@@ -7,7 +7,7 @@ SKIP := 🔕
 
 SED := $(shell which sed)
 
-GOTEST_COLORIZE := COLORIZE ?= | $(SED) 's/PASS/$(OK) PASS/g' | $(SED) 's/FAIL/$(NOK) FAIL/g' | $(SED) 's/SKIP/$(SKIP) SKIP/g'
+GOTEST_COLORIZE := | $(SED) 's/PASS/$(OK) PASS/g' | $(SED) 's/FAIL/$(NOK) FAIL/g' | $(SED) 's/SKIP/$(SKIP) SKIP/g'
 
 
 .DEFAULT := help
