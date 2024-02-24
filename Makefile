@@ -43,12 +43,27 @@ test: ## Runs the library tests
 	@go test ./... -race -test.v $(GOTEST_COLORIZE)
 
 
-# TODO: Run benchmark in a separated CI Step
 .PHONY: bench
 bench: ## Runs the library benchmarks
 	$(info Running project benchmarks..)
 	@go clean -testcache
-	@go test ./... -race -bench=. -count 3 $(GOTEST_COLORIZE)
+	@go test ./benchmark/ -race -bench . -count 5 $(GOTEST_COLORIZE)
+
+
+.PHONY: profile
+profile: ## Generates CPU and Memory Profiles from Benchmarks
+	$(info Running project benchmarks..)
+	@go clean -testcache
+	@go test ./benchmark/ -race -bench . -count 5 \
+		-benchmem -memprofile profiles/mem-profile.out \
+		-cpuprofile profiles/cpu-profile.out \
+		$(GOTEST_COLORIZE)
+
+
+.PHONY: clean_profile
+clean_profile: ## Cleans profiles data from profiles directory
+	$(info Cleaning profiling data..)
+	@rm -vf profiles/*.out
 
 
 .PHONY: lint
