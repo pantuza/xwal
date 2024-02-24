@@ -95,7 +95,6 @@ func (wal *XWAL) writeOrFlush(entry *xwalpb.WALEntry) error {
 	// If the buffer is full, flush it
 	if err := wal.buffer.Write(entry); err != nil {
 		if err.Error() == buffer.ErrorShouldFlushBuffer {
-			fmt.Println("Flushing buffer")
 			// Flushes the In Memory Buffer and Writes to the WAL Backend
 			if err := wal.flushToBackend(); err != nil {
 				return err
@@ -127,7 +126,17 @@ func (wal *XWAL) flushToBackend() error {
 	return nil
 }
 
+// TODO: Maybe we should return a channel to stream the entries instead of doing it synchronously
+func (wal *XWAL) Replay() ([]*xwalpb.WALEntry, error) {
+	wal.lock.RLock()
+	defer wal.lock.RUnlock()
+
+	return wal.backend.Replay()
+}
+
 func (wal *XWAL) Close() error {
+	fmt.Println("Closing xWAL")
+
 	wal.cancel()
 	wal.FlushInterval.Stop()
 	return wal.backend.Close()

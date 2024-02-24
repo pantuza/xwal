@@ -1,7 +1,6 @@
 package xwal
 
 import (
-	"fmt"
 	"os"
 	"time"
 
@@ -30,7 +29,7 @@ type XWALConfig struct {
 	// The backend configuration
 	BackendConfig WALBackendsConfigs `yaml:"backends"`
 
-	// Number of segments allowed inside the in memory buffer
+	// Size of the in memory buffer in MB
 	BufferSize float64 `yaml:"bufferSize"`
 
 	// Number of entries allowed inside the in memory buffer
@@ -79,7 +78,6 @@ func loadConfigFromFile(filename string) (*XWALConfig, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		// TODO: Log to stdout we couldn't READ the config file return config, nil
-		fmt.Println(err)
 		return nil, err
 	}
 
