@@ -85,3 +85,28 @@ func TestWrite(t *testing.T) {
 
 	assert.Equal(t, marshalledData, marshalledFromFile, "The data written to the file should match the expected entry data.")
 }
+
+func TestReplay(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+	err := wal.Open()
+	assert.NoError(t, err)
+
+	// Create a sample WALEntry to write.
+	entry := &xwalpb.WALEntry{
+		LSN:  1,
+		Data: []byte("test data"),
+		CRC:  1,
+	}
+	entries := []*xwalpb.WALEntry{entry}
+
+	// Test writing the entry to WAL.
+	err = wal.Write(entries)
+	assert.NoError(t, err)
+
+	// Test replaying the WAL.
+	replayedEntries, err := wal.Replay()
+	assert.NoError(t, err)
+
+	// Verify the replayed entries are correct.
+	assert.Equal(t, len(entries), len(replayedEntries), "The replayed entries length should match the written entries length.")
+}
