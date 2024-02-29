@@ -110,3 +110,59 @@ func TestReplay(t *testing.T) {
 	// Verify the replayed entries are correct.
 	assert.Equal(t, len(entries), len(replayedEntries), "The replayed entries length should match the written entries length.")
 }
+
+func TestGetSegmentsFilesFromRange(t *testing.T) {
+	wal, dir := setupLocalFSWALBackend()
+	err := wal.Open()
+	assert.NoError(t, err)
+
+	// Create a sample WALEntry to write.
+	entry := &xwalpb.WALEntry{
+		LSN:  1,
+		Data: []byte("test data"),
+		CRC:  1,
+	}
+	entries := []*xwalpb.WALEntry{entry}
+
+	// Test writing the entry to WAL.
+	err = wal.Write(entries)
+	assert.NoError(t, err)
+
+	// Test getting the segment files from the range.
+	segmentFiles, err := wal.getSegmentsFilesFromRange(0, 0)
+	assert.NoError(t, err)
+
+	// Verify the segment files are correct.
+	expected := []string{filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, 0))}
+	assert.Equal(t, expected, segmentFiles, "The segment files should match the expected segment files.")
+}
+
+func TestReadEntriesFromFile(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+	err := wal.Open()
+	assert.NoError(t, err)
+
+	// Create a sample WALEntry to write.
+	entry := &xwalpb.WALEntry{
+		LSN:  1,
+		Data: []byte("test data"),
+		CRC:  1,
+	}
+	entries := []*xwalpb.WALEntry{entry}
+
+	// Test writing the entry to WAL.
+	err = wal.Write(entries)
+	assert.NoError(t, err)
+
+	// Test reading the entries from the file.
+	filename := fmt.Sprintf(LFSWALSegmentFileFormat, 0)
+	filepath := filepath.Join(wal.cfg.DirPath, filename)
+	file, err := os.Open(filepath)
+	assert.NoError(t, err)
+
+	readedEntries, err := wal.readEntriesFromFile(file)
+	assert.NoError(t, err)
+
+	// Verify the readed entries are correct.
+	assert.Equal(t, len(entries), len(readedEntries), "The readed entries should match the written entries.")
+}
