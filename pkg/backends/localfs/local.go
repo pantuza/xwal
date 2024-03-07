@@ -137,31 +137,33 @@ func (wal *LocalFSWALBackend) Read(index int64) (xwalpb.WALEntry, error) {
 	return xwalpb.WALEntry{}, nil
 }
 
-func (wal *LocalFSWALBackend) Replay() ([]*xwalpb.WALEntry, error) {
-	var entries []*xwalpb.WALEntry
+func (wal *LocalFSWALBackend) Replay(channel chan *xwalpb.WALEntry) error {
 
 	segmentsFiles, err := wal.getSegmentsFilesFromRange(wal.firstSegmentIndex, wal.lastSegmentIndex)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting segment files from range. Error: %s", err)
+		return fmt.Errorf("Error getting segment files from range. Error: %s", err)
 	}
 
 	for _, segmentFile := range segmentsFiles {
 
 		file, err := os.Open(segmentFile)
 		if err != nil {
-			return nil, fmt.Errorf("Error opening segment file '%s' for replay. Error: %s", segmentFile, err)
+			return fmt.Errorf("Error opening segment file '%s' for replay. Error: %s", segmentFile, err)
 		}
 		readedEntries, err := wal.readEntriesFromFile(file)
 		if err != nil {
-			return nil, fmt.Errorf("Error reading entries from segment file '%s' for replay. Error: %s", segmentFile, err)
+			return fmt.Errorf("Error reading entries from segment file '%s' for replay. Error: %s", segmentFile, err)
 		}
 		file.Close()
 
-		// Append the current readed entries to the slice of entries
-		entries = append(entries, readedEntries...)
+		for _, entry := range readedEntries {
+			if entry != nil {
+				channel <- entry
+			}
+		}
 	}
 
-	return entries, nil
+	return nil
 }
 
 func (wal *LocalFSWALBackend) getSegmentsFilesFromRange(start, end uint32) ([]string, error) {

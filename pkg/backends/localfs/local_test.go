@@ -103,9 +103,15 @@ func TestReplay(t *testing.T) {
 	err = wal.Write(entries)
 	assert.NoError(t, err)
 
-	// Test replaying the WAL.
-	replayedEntries, err := wal.Replay()
+	channel := make(chan *xwalpb.WALEntry, 1)
+	err = wal.Replay(channel)
 	assert.NoError(t, err)
+	close(channel)
+
+	replayedEntries := make([]*xwalpb.WALEntry, 0)
+	for entry := range channel {
+		replayedEntries = append(replayedEntries, entry)
+	}
 
 	// Verify the replayed entries are correct.
 	assert.Equal(t, len(entries), len(replayedEntries), "The replayed entries length should match the written entries length.")
