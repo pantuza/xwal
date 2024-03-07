@@ -13,8 +13,8 @@ type WALBackendInterface interface {
 	// If the entry does not exist, an error should be returned.
 	Read(index int64) (xwalpb.WALEntry, error)
 
-	// Replays log from beginning
-	Replay() ([]*xwalpb.WALEntry, error)
+	// Replays log from beginning to end, sending each entry to the provided channel
+	Replay(channel chan *xwalpb.WALEntry) error
 
 	// Flush ensures that all buffered log entries are written to the storage.
 	Flush() error
