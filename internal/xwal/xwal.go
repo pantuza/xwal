@@ -126,12 +126,56 @@ func (wal *XWAL) flushToBackend() error {
 	return nil
 }
 
-// TODO: Maybe we should return a channel to stream the entries instead of doing it synchronously
-func (wal *XWAL) Replay() ([]*xwalpb.WALEntry, error) {
+func (wal *XWAL) Replay(callback func([]*xwalpb.WALEntry) error, batchSize int) error {
 	wal.lock.RLock()
 	defer wal.lock.RUnlock()
 
-	return wal.backend.Replay()
+	channel := make(chan *xwalpb.WALEntry, 1)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go wal.replayEntriesUsingUserCallback(channel, batchSize, callback, &wg)
+
+	if err := wal.backend.Replay(channel); err != nil {
+		return fmt.Errorf("Error replaying entries: %v", err)
+	}
+	close(channel)
+
+	wg.Wait()
+	return nil
+}
+
+// Async function to read batchSize entries from a channel and call the callback function
+func (wal *XWAL) replayEntriesUsingUserCallback(channel chan *xwalpb.WALEntry, batchSize int, callback func([]*xwalpb.WALEntry) error, wg *sync.WaitGroup) {
+	entries := make([]*xwalpb.WALEntry, 0, batchSize)
+	for {
+		select {
+		case entry, ok := <-channel:
+			if !ok { // No more entries left in the channel
+
+				// If there are entries left, call the callback function
+				if err := callback(entries); err != nil {
+					fmt.Println(err)
+				}
+
+				wg.Done()
+				return
+			}
+
+			entries = append(entries, entry)
+
+			if len(entries) == batchSize {
+				if err := callback(entries); err != nil {
+					fmt.Println(err) // TODO: Log error properly
+				} else {
+					entries = make([]*xwalpb.WALEntry, 0, batchSize)
+				}
+			}
+
+		case <-wal.ctx.Done():
+			return
+		}
+	}
 }
 
 func (wal *XWAL) Close() error {
