@@ -33,14 +33,14 @@ func main() {
 		}
 	}
 
-	entries, err := xwal.Replay()
+	err = xwal.Replay(func(entries []*xwalpb.WALEntry) error {
+		for _, entry := range entries {
+			spew.Dump(entry)
+		}
+		return nil // Return nil or an appropriate error value
+	}, 5)
 	if err != nil {
 		panic(err)
 	}
-
-	for _, entry := range entries {
-		spew.Dump(entry)
-	}
-
 	// spew.Dump(xwal)
 }
