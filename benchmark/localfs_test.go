@@ -30,7 +30,9 @@ func BenchmarkLocalFSReplay(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := wal.Replay()
+		err := wal.Replay(func(entries []*xwalpb.WALEntry) error {
+			return nil
+		}, 5)
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/pantuza/xwal/protobuf/xwalpb"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPeriodicFlush(t *testing.T) {
@@ -35,12 +36,14 @@ func TestPeriodicFlush(t *testing.T) {
 		// wait for the periodic TestPeriodicFlush to run
 		time.Sleep(200 * time.Millisecond)
 
-		entries, err := wal.Replay()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(entries) != 3 {
-			t.Fatalf("expected 3 entries, got %d", len(entries))
-		}
+		entriesReaded := make([]*xwalpb.WALEntry, 0, 3)
+
+		err = wal.Replay(func(entries []*xwalpb.WALEntry) error {
+			entriesReaded = append(entriesReaded, entries...)
+			return nil
+		}, 1)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 3, len(entriesReaded))
 	})
 }
