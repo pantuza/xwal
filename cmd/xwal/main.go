@@ -13,8 +13,8 @@ func main() {
 	entry := &xwalpb.WALEntry{
 		LSN:  42,
 		Data: []byte("fake data"),
-		CRC:  42,
 	}
+	entry.CRC, _ = entry.Checksum()
 
 	cfg := xwal.NewXWALConfig("")
 	cfg.BufferSize = 1
