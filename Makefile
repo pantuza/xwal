@@ -82,3 +82,13 @@ setup: ./scripts/local_setup.sh ## Sets up the local machine with OS level tools
 build: cmd/xwal/main.go ## Builds a library binary
 	$(info • Building xWAL project..)
 	@go build -race -o bin/xwal $^ && echo $(OK) || echo $(NOK)
+
+
+.PHONY: check
+check: _clrscr tidy lint test bench build run ## Runs all checks before sending code remote repository
+	@echo "$(OK) All checks have passed"
+
+
+.PHONY: _clrscr
+_clrscr:
+	@clear
