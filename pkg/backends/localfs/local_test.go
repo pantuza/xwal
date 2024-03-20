@@ -52,7 +52,6 @@ func TestWrite(t *testing.T) {
 	err := wal.Open()
 	assert.NoError(t, err)
 
-	// Create a sample WALEntry to write.
 	entry := &xwalpb.WALEntry{
 		LSN:  1,
 		Data: []byte("test data"),
@@ -60,7 +59,6 @@ func TestWrite(t *testing.T) {
 	}
 	entries := []*xwalpb.WALEntry{entry}
 
-	// Test writing the entry to WAL.
 	err = wal.Write(entries)
 	assert.NoError(t, err)
 
@@ -91,7 +89,6 @@ func TestReplay(t *testing.T) {
 	err := wal.Open()
 	assert.NoError(t, err)
 
-	// Create a sample WALEntry to write.
 	entry := &xwalpb.WALEntry{
 		LSN:  1,
 		Data: []byte("test data"),
@@ -99,7 +96,6 @@ func TestReplay(t *testing.T) {
 	}
 	entries := []*xwalpb.WALEntry{entry}
 
-	// Test writing the entry to WAL.
 	err = wal.Write(entries)
 	assert.NoError(t, err)
 
@@ -122,7 +118,6 @@ func TestGetSegmentsFilesFromRange(t *testing.T) {
 	err := wal.Open()
 	assert.NoError(t, err)
 
-	// Create a sample WALEntry to write.
 	entry := &xwalpb.WALEntry{
 		LSN:  1,
 		Data: []byte("test data"),
@@ -130,7 +125,6 @@ func TestGetSegmentsFilesFromRange(t *testing.T) {
 	}
 	entries := []*xwalpb.WALEntry{entry}
 
-	// Test writing the entry to WAL.
 	err = wal.Write(entries)
 	assert.NoError(t, err)
 
@@ -148,7 +142,6 @@ func TestReadEntriesFromFile(t *testing.T) {
 	err := wal.Open()
 	assert.NoError(t, err)
 
-	// Create a sample WALEntry to write.
 	entry := &xwalpb.WALEntry{
 		LSN:  1,
 		Data: []byte("test data"),
@@ -156,11 +149,9 @@ func TestReadEntriesFromFile(t *testing.T) {
 	}
 	entries := []*xwalpb.WALEntry{entry}
 
-	// Test writing the entry to WAL.
 	err = wal.Write(entries)
 	assert.NoError(t, err)
 
-	// Test reading the entries from the file.
 	filename := fmt.Sprintf(LFSWALSegmentFileFormat, 0)
 	filepath := filepath.Join(wal.cfg.DirPath, filename)
 	file, err := os.Open(filepath)
@@ -171,4 +162,39 @@ func TestReadEntriesFromFile(t *testing.T) {
 
 	// Verify the readed entries are correct.
 	assert.Equal(t, len(entries), len(readedEntries), "The readed entries should match the written entries.")
+}
+
+func TestGetLastSequencyNumber(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+	err := wal.Open()
+	assert.NoError(t, err)
+
+	entry1 := &xwalpb.WALEntry{
+		LSN:  1,
+		Data: []byte("test data"),
+		CRC:  1,
+	}
+	entry2 := &xwalpb.WALEntry{
+		LSN:  2,
+		Data: []byte("test data"),
+		CRC:  1,
+	}
+	entries := []*xwalpb.WALEntry{entry1, entry2}
+
+	err = wal.Write(entries)
+	assert.NoError(t, err)
+
+	err = wal.getLastLogSequencyNumber()
+	assert.NoError(t, err)
+
+	// Verify the last sequence number is correct.
+	assert.Equal(t, uint64(2), wal.lastLSN, "The last sequence number should match the expected sequence number.")
+}
+
+func TestGetLastSequencyNumberWithNoEntries(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+
+	err := wal.getLastLogSequencyNumber()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), wal.lastLSN, "The last sequence number should be 0 since there is no entries.")
 }
