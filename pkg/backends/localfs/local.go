@@ -212,6 +212,29 @@ func (wal *LocalFSWALBackend) readEntriesFromFile(file *os.File) ([]*xwalpb.WALE
 	return entries, nil
 }
 
+func (wal *LocalFSWALBackend) getLastLogSequencyNumber() error {
+	if wal.currentSegmentFile == nil {
+		return fmt.Errorf("No current segment file to get the last LSN. Try opening the wal first. wal.Open() method")
+	}
+
+	file, err := os.Open(wal.currentSegmentFile.Name())
+	if err != nil {
+		return fmt.Errorf("Error opening current segment file for getting the last log sequency number. Error: %s", err)
+	}
+
+	entries, err := wal.readEntriesFromFile(file)
+	if err != nil {
+		return fmt.Errorf("Error reading entries from current segment file. Error: %s", err)
+	}
+
+	wal.lastLSN = 0
+	if len(entries) > 0 {
+		wal.lastLSN = entries[len(entries)-1].GetLSN()
+	}
+
+	return nil
+}
+
 func (wal *LocalFSWALBackend) Flush() error {
 	return nil
 }
