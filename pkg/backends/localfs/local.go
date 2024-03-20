@@ -135,6 +135,10 @@ func (wal *LocalFSWALBackend) Write(entries []*xwalpb.WALEntry) error {
 		return fmt.Errorf("Error writing all entries to segment file. Error: %s", err)
 	}
 
+	if err := wal.currentSegmentFile.Sync(); err != nil { // Flushes file to disk
+		return fmt.Errorf("Error syncing segment file. Error: %s", err)
+	}
+
 	return nil
 }
 
@@ -143,7 +147,6 @@ func (wal *LocalFSWALBackend) Read(index int64) (xwalpb.WALEntry, error) {
 }
 
 func (wal *LocalFSWALBackend) Replay(channel chan *xwalpb.WALEntry) error {
-
 	segmentsFiles, err := wal.getSegmentsFilesFromRange(wal.firstSegmentIndex, wal.lastSegmentIndex)
 	if err != nil {
 		return fmt.Errorf("Error getting segment files from range. Error: %s", err)
