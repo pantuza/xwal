@@ -36,6 +36,7 @@ type LocalFSWALBackend struct {
 	lastSegmentIndex  uint32
 
 	currentSegmentFile *os.File
+	lastLSN            uint64
 }
 
 func NewLocalFSWALBackend(cfg *LocalFSConfig) *LocalFSWALBackend {
@@ -50,6 +51,10 @@ func (wal *LocalFSWALBackend) Open() error {
 		return err
 	}
 	if err := wal.openCurrentSegmentFile(); err != nil {
+		return err
+	}
+
+	if err := wal.getLastLogSequencyNumber(); err != nil {
 		return err
 	}
 
