@@ -195,6 +195,11 @@ func (wal *LocalFSWALBackend) Replay(channel chan *xwalpb.WALEntry) error {
 				channel <- entry
 			}
 		}
+
+		// Rename the file to a garbage file that will be deleted asynchronously
+		if err := os.Rename(segmentFile, segmentFile+LFSGarbageFileExtension); err != nil {
+			return fmt.Errorf("Error renaming segment file to garbage file. Error: %s", err)
+		}
 	}
 
 	return nil
