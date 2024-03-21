@@ -302,6 +302,15 @@ func (wal *LocalFSWALBackend) Flush() error {
 }
 
 func (wal *LocalFSWALBackend) Close() error {
+	// closes current segment file
+	if err := wal.currentSegmentFile.Close(); err != nil {
+		return fmt.Errorf("LocalFSWALBackend shutdown: Error closing current segment file. Error: %s", err)
+	}
+
+	// stops the clean logs interval
+	wal.cleanLogsInterval.Stop()
+	wal.ctx.Done()
+
 	return nil
 }
 
