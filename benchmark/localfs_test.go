@@ -16,14 +16,10 @@ func BenchmarkLocalFSReplay(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	entry := &xwalpb.WALEntry{
-		LSN:  42,
-		Data: []byte("fake data"),
-		CRC:  42,
-	}
+	data := []byte("fake data")
 
 	for i := 0; i < 12; i++ {
-		if err := wal.Write(entry); err != nil {
+		if err := wal.Write(data); err != nil {
 			b.Fatal(err)
 		}
 	}
