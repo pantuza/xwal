@@ -24,7 +24,10 @@ type WALBackendInterface interface {
 
 	// LastIndex returns the index of the last entry written to the log.
 	// This can be used to resume operations after a restart.
-	LastIndex() uint32
+	LastIndex() uint64
+
+	// Increments the index of the last entry written to the log.
+	IncLastIndex()
 
 	// Type returns the type of the WAL backend
 	Type() WALBackendType
