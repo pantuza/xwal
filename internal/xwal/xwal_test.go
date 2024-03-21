@@ -21,14 +21,10 @@ func TestPeriodicFlush(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		entry := &xwalpb.WALEntry{
-			LSN:  42,
-			Data: []byte("fake data"),
-			CRC:  42,
-		}
+		data := []byte("fake data")
 
 		for i := 0; i < 3; i++ {
-			if err := wal.Write(entry); err != nil {
+			if err := wal.Write(data); err != nil {
 				t.Fatal(err)
 			}
 		}
