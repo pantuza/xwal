@@ -71,11 +71,36 @@ func (wal *XWAL) PeriodicFlush() {
 	}
 }
 
-func (wal *XWAL) Write(entry *xwalpb.WALEntry) error {
+func (wal *XWAL) Write(data []byte) error {
 	wal.lock.Lock()
 	defer wal.lock.Unlock()
 
+	entry, err := wal.createWALEntry(data)
+	if err != nil {
+		return fmt.Errorf("Error creating WALEntry: %v", err)
+	}
+
 	return wal.writeOrFlush(entry)
+}
+
+func (wal *XWAL) createWALEntry(data []byte) (*xwalpb.WALEntry, error) {
+	if wal.backend == nil {
+		return nil, fmt.Errorf("WAL backend not initialized. You must call NewXWAL to create a new WAL instance.")
+	}
+
+	entry := &xwalpb.WALEntry{
+		LSN:  wal.backend.LastIndex() + 1,
+		Data: data,
+	}
+
+	var err error
+	entry.CRC, err = entry.Checksum()
+	if err != nil {
+		return nil, fmt.Errorf("Error calculating checksum while creating a new entry: %v", err)
+	}
+
+	wal.backend.IncLastIndex()
+	return entry, nil
 }
 
 func (wal *XWAL) WriteBatch(entries []*xwalpb.WALEntry) error {
