@@ -243,6 +243,10 @@ func (wal *LocalFSWALBackend) Close() error {
 	return nil
 }
 
-func (wal *LocalFSWALBackend) LastIndex() uint32 {
-	return wal.lastSegmentIndex
+func (wal *LocalFSWALBackend) LastIndex() uint64 {
+	return wal.lastLSN
+}
+
+func (wal *LocalFSWALBackend) IncLastIndex() {
+	wal.lastLSN++
 }
