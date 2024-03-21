@@ -10,11 +10,6 @@ import (
 
 func main() {
 	fmt.Println("xWAL library")
-	entry := &xwalpb.WALEntry{
-		LSN:  42,
-		Data: []byte("fake data"),
-	}
-	entry.CRC, _ = entry.Checksum()
 
 	cfg := xwal.NewXWALConfig("")
 	cfg.BufferSize = 1
@@ -27,8 +22,11 @@ func main() {
 	defer xwal.Close()
 
 	for i := 0; i < 12; i++ {
+
 		fmt.Printf("Writing entry %d\n", i)
-		if err := xwal.Write(entry); err != nil {
+
+		data := []byte(`{"name": "John", "age": 42, "city": "Belo Horizonte"}`) // any []byte fake data
+		if err := xwal.Write(data); err != nil {
 			panic(err)
 		}
 	}
