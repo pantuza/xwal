@@ -2,10 +2,12 @@ package localfs
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
@@ -13,9 +15,14 @@ import (
 )
 
 const (
+	// Default directory permission for the Local File System Backend
 	LFSDefaultDirPermission = 0744
 
+	// Segments files of the WAL are named using this format
 	LFSWALSegmentFileFormat = "wal_%05d"
+
+	// Files with this extension are considered garbage and will be deleted
+	LFSGarbageFileExtension = ".garbage"
 )
 
 type LocalFSConfig struct {
