@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"github.com/stretchr/testify/assert"
@@ -197,4 +198,31 @@ func TestGetLastSequencyNumberWithNoEntries(t *testing.T) {
 	err := wal.getLastLogSequencyNumber()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), wal.lastLSN, "The last sequence number should be 0 since there is no entries.")
+}
+
+func TestGetLastSequencyNumberWithNoCurrentSegmentFile(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+	wal.currentSegmentFile = nil
+
+	err := wal.getLastLogSequencyNumber()
+	assert.Error(t, err)
+}
+
+func TestCleanLogs(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+	wal.cfg.CleanLogsInterval = 1 * time.Millisecond
+
+	err := wal.Open()
+	assert.NoError(t, err)
+
+	// create a fake file with .garbage extension
+	// to be cleaned by calling directly the cleanGarbageLogs method
+	garbageFile, err := os.Create(filepath.Join(wal.cfg.DirPath, "garbage.garbage"))
+	assert.NoError(t, err)
+
+	err = wal.deleteStaleFiles()
+	assert.NoError(t, err)
+
+	_, err = os.Stat(garbageFile.Name())
+	assert.Error(t, err)
 }
