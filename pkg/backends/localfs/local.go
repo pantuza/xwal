@@ -82,6 +82,8 @@ func (wal *LocalFSWALBackend) Open() error {
 		return err
 	}
 
+	go wal.cleanGarbageLogs(wal.ctx)
+
 	return nil
 }
 
@@ -254,6 +256,37 @@ func (wal *LocalFSWALBackend) getLastLogSequencyNumber() error {
 	wal.lastLSN = 0
 	if len(entries) > 0 {
 		wal.lastLSN = entries[len(entries)-1].GetLSN()
+	}
+
+	return nil
+}
+
+func (wal *LocalFSWALBackend) cleanGarbageLogs(ctx context.Context) {
+	for {
+		select {
+		case <-wal.cleanLogsInterval.C:
+
+			if err := wal.deleteStaleFiles(); err != nil {
+				fmt.Printf("Error cleaning Garbage Logs from inside goroutine. Error: %s", err)
+			}
+
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (wal *LocalFSWALBackend) deleteStaleFiles() error {
+	files, err := os.ReadDir(wal.cfg.DirPath)
+	if err != nil {
+		fmt.Printf("Error reading directory entries for deletion. Error: %s", err)
+	}
+
+	for _, file := range files {
+		fmt.Println("file.Name(): ", file.Name())
+		if filepath.Ext(file.Name()) == ".garbage" {
+			os.Remove(filepath.Join(wal.cfg.DirPath, file.Name()))
+		}
 	}
 
 	return nil
