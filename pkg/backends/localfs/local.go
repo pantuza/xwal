@@ -34,10 +34,16 @@ type LocalFSConfig struct {
 
 	// Size in megabytes of each file inside the WAL
 	FileSize int `yaml:"fileSize"`
+
+	// Interval to clean garbage logs
+	CleanLogsInterval time.Duration `yaml:"cleanLogsInterval"`
 }
 
 type LocalFSWALBackend struct {
 	cfg *LocalFSConfig
+
+	ctx               context.Context
+	cleanLogsInterval *time.Ticker
 
 	firstSegmentIndex uint32
 	lastSegmentIndex  uint32
@@ -47,7 +53,18 @@ type LocalFSWALBackend struct {
 }
 
 func NewLocalFSWALBackend(cfg *LocalFSConfig) *LocalFSWALBackend {
-	return &LocalFSWALBackend{cfg: cfg, firstSegmentIndex: 0, lastSegmentIndex: 0}
+	if cfg.CleanLogsInterval == 0 {
+		cfg.CleanLogsInterval = 1 * time.Minute // Default interval to clean garbage logs
+	}
+
+	return &LocalFSWALBackend{
+		cfg:               cfg,
+		ctx:               context.Background(),
+		cleanLogsInterval: time.NewTicker(cfg.CleanLogsInterval),
+		firstSegmentIndex: 0,
+		lastSegmentIndex:  0,
+		lastLSN:           0,
+	}
 }
 
 func (wal *LocalFSWALBackend) Open() error {
