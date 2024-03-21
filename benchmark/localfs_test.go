@@ -8,25 +8,24 @@ import (
 )
 
 func BenchmarkLocalFSReplay(b *testing.B) {
-	cfg := xwal.NewXWALConfig("")
-	cfg.BufferSize = 1
-	cfg.BufferEntriesLength = 5
-	wal, err := xwal.NewXWAL(cfg)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	data := []byte("fake data")
-
-	for i := 0; i < 12; i++ {
-		if err := wal.Write(data); err != nil {
+	for i := 0; i < b.N; i++ {
+		cfg := xwal.NewXWALConfig("")
+		cfg.BufferSize = 1
+		cfg.BufferEntriesLength = 5
+		wal, err := xwal.NewXWAL(cfg)
+		if err != nil {
 			b.Fatal(err)
 		}
-	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		err := wal.Replay(func(entries []*xwalpb.WALEntry) error {
+		data := []byte("fake data")
+
+		for i := 0; i < 12; i++ {
+			if err := wal.Write(data); err != nil {
+				b.Fatal(err)
+			}
+		}
+
+		err = wal.Replay(func(entries []*xwalpb.WALEntry) error {
 			return nil
 		}, 5)
 		if err != nil {
