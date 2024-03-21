@@ -63,9 +63,10 @@ func loadDefaultConfigValues() *XWALConfig {
 		FlushFrequency:      1 * time.Second,
 		BackendConfig: WALBackendsConfigs{
 			LocalFS: &localfs.LocalFSConfig{
-				DirPath:      "/tmp/xwal",
-				SegmentsSize: 2,
-				FileSize:     1000,
+				DirPath:           "/tmp/xwal",
+				SegmentsSize:      2,
+				FileSize:          1000,
+				CleanLogsInterval: 1 * time.Minute,
 			},
 		},
 	}
