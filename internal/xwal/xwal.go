@@ -17,7 +17,7 @@ type XWAL struct {
 	lock          sync.RWMutex
 	ctx           context.Context
 	cancel        context.CancelFunc
-	FlushInterval time.Ticker
+	FlushInterval *time.Ticker
 	buffer        *buffer.InMemoryBuffer
 	backend       types.WALBackendInterface
 }
@@ -30,7 +30,7 @@ func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
 		lock:          sync.RWMutex{},
 		ctx:           ctx,
 		cancel:        cancel,
-		FlushInterval: *time.NewTicker(cfg.FlushFrequency),
+		FlushInterval: time.NewTicker(cfg.FlushFrequency),
 		buffer:        buffer.NewInMemoryBuffer(cfg.BufferSize, cfg.BufferEntriesLength),
 	}
 
