@@ -93,8 +93,10 @@ func TestReplay(t *testing.T) {
 	entry := &xwalpb.WALEntry{
 		LSN:  1,
 		Data: []byte("test data"),
-		CRC:  1,
 	}
+	entry.CRC, err = entry.Checksum()
+	assert.NoError(t, err)
+
 	entries := []*xwalpb.WALEntry{entry}
 
 	err = wal.Write(entries)
