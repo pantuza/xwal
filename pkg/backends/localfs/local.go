@@ -192,6 +192,16 @@ func (wal *LocalFSWALBackend) Replay(channel chan *xwalpb.WALEntry) error {
 
 		for _, entry := range readedEntries {
 			if entry != nil {
+
+				chksum, err := entry.Checksum()
+				if err != nil {
+					fmt.Printf("Fail to validate entry checksum. Skiping replaying entry: LSN=%d, SegmentFile=%s", entry.LSN, segmentFile)
+				}
+
+				if entry.CRC != chksum {
+					fmt.Printf("Entry Checksum does not match! Skiping replaying entry: LSN=%d, SegmentFile=%s, EntryCRC: %d, CalculatedCRC: %d", entry.LSN, segmentFile, entry.CRC, chksum)
+					continue
+				}
 				channel <- entry
 			}
 		}
@@ -288,7 +298,6 @@ func (wal *LocalFSWALBackend) deleteStaleFiles() error {
 	}
 
 	for _, file := range files {
-		fmt.Println("file.Name(): ", file.Name())
 		if filepath.Ext(file.Name()) == ".garbage" {
 			os.Remove(filepath.Join(wal.cfg.DirPath, file.Name()))
 		}
