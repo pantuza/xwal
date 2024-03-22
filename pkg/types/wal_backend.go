@@ -14,6 +14,9 @@ type WALBackendInterface interface {
 	Read(index int64) (xwalpb.WALEntry, error)
 
 	// Replays log from beginning to end, sending each entry to the provided channel
+	// Things that Replay should make sure to care of:
+	// - Verify if Checksum matches before sending an entry to replay channel
+	// - Remove file (any entries storage) after reading all entries from it
 	Replay(channel chan *xwalpb.WALEntry) error
 
 	// Flush ensures that all buffered log entries are written to the storage.
