@@ -306,10 +306,6 @@ func (wal *LocalFSWALBackend) deleteStaleFiles() error {
 	return nil
 }
 
-func (wal *LocalFSWALBackend) Flush() error {
-	return nil
-}
-
 func (wal *LocalFSWALBackend) Close() error {
 	// closes current segment file
 	if err := wal.currentSegmentFile.Close(); err != nil {
