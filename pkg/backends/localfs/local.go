@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/pantuza/xwal/pkg/types"
@@ -168,14 +169,14 @@ func (wal *LocalFSWALBackend) Write(entries []*xwalpb.WALEntry) error {
 	return nil
 }
 
-func (wal *LocalFSWALBackend) Read(index int64) (xwalpb.WALEntry, error) {
-	return xwalpb.WALEntry{}, nil
-}
-
-func (wal *LocalFSWALBackend) Replay(channel chan *xwalpb.WALEntry) error {
+func (wal *LocalFSWALBackend) Replay(channel chan *xwalpb.WALEntry, backwards bool) error {
 	segmentsFiles, err := wal.getSegmentsFilesFromRange(wal.firstSegmentIndex, wal.lastSegmentIndex)
 	if err != nil {
 		return fmt.Errorf("Error getting segment files from range. Error: %s", err)
+	}
+
+	if backwards {
+		slices.Reverse(segmentsFiles)
 	}
 
 	for _, segmentFile := range segmentsFiles {
