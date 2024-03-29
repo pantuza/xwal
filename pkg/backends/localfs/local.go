@@ -169,6 +169,9 @@ func (wal *LocalFSWALBackend) Write(entries []*xwalpb.WALEntry) error {
 	return nil
 }
 
+// Replay replays the entries from the segment files to the channel.
+// It allows to replay the entries in a backwards order.
+// It always consider the entire WAL. Thus, from the first segment file to the last segment file or backwards.
 func (wal *LocalFSWALBackend) Replay(channel chan *xwalpb.WALEntry, backwards bool) error {
 	segmentsFiles, err := wal.getSegmentsFilesFromRange(wal.firstSegmentIndex, wal.lastSegmentIndex)
 	if err != nil {
@@ -179,6 +182,47 @@ func (wal *LocalFSWALBackend) Replay(channel chan *xwalpb.WALEntry, backwards bo
 		slices.Reverse(segmentsFiles)
 	}
 
+	return wal.replaySegments(segmentsFiles, channel, backwards)
+}
+
+// ReplayFromRange replays the entries from the segment files to the channel.
+// It allows to replay the entries from the given range of Segments Files in a backwards order.
+// It always respects the range provided. If a invalid range is provided, it will return an error.
+func (wal *LocalFSWALBackend) ReplayFromRange(channel chan *xwalpb.WALEntry, backwards bool, start, end uint32) error {
+	if start < wal.firstSegmentIndex || end > wal.lastSegmentIndex {
+		return fmt.Errorf("Invalid range provided. Start: %d, End: %d. First Segment file Index: %d, Last Segment file Index: %d", start, end, wal.firstSegmentIndex, wal.lastSegmentIndex)
+	}
+
+	segmentsFiles, err := wal.getSegmentsFilesFromRange(start, end)
+	if err != nil {
+		return fmt.Errorf("Error getting segment files from range. Error: %s", err)
+	}
+
+	if backwards {
+		slices.Reverse(segmentsFiles)
+	}
+
+	return wal.replaySegments(segmentsFiles, channel, backwards)
+}
+
+func (wal *LocalFSWALBackend) getSegmentsFilesFromRange(start, end uint32) ([]string, error) {
+	var files []string
+	for i := start; i <= end; i++ {
+		files = append(files, filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
+	}
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("No segment files found in the range from %d to %d", start, end)
+	}
+
+	return files, nil
+}
+
+// replaySegments replays the entries from the segment files to the channel.
+// It also renames the segment files to a garbage file that will be deleted asynchronously.
+//
+// This method do care about Ordering. Given the list of segments files, it will replay them in the order they are provided.
+func (wal *LocalFSWALBackend) replaySegments(segmentsFiles []string, channel chan *xwalpb.WALEntry, backwards bool) error {
 	for _, segmentFile := range segmentsFiles {
 
 		file, err := os.Open(segmentFile)
@@ -190,6 +234,10 @@ func (wal *LocalFSWALBackend) Replay(channel chan *xwalpb.WALEntry, backwards bo
 			return fmt.Errorf("Error reading entries from segment file '%s' for replay. Error: %s", segmentFile, err)
 		}
 		file.Close()
+
+		if backwards {
+			slices.Reverse(readedEntries)
+		}
 
 		for _, entry := range readedEntries {
 			if entry != nil {
@@ -214,19 +262,6 @@ func (wal *LocalFSWALBackend) Replay(channel chan *xwalpb.WALEntry, backwards bo
 	}
 
 	return nil
-}
-
-func (wal *LocalFSWALBackend) getSegmentsFilesFromRange(start, end uint32) ([]string, error) {
-	var files []string
-	for i := start; i <= end; i++ {
-		files = append(files, filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
-	}
-
-	if len(files) == 0 {
-		return nil, fmt.Errorf("No segment files found in the range from %d to %d", start, end)
-	}
-
-	return files, nil
 }
 
 // Reads entries from a file into a slice of WALEntry.
