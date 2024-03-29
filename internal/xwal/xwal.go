@@ -151,7 +151,7 @@ func (wal *XWAL) flushToBackend() error {
 	return nil
 }
 
-func (wal *XWAL) Replay(callback func([]*xwalpb.WALEntry) error, batchSize int) error {
+func (wal *XWAL) Replay(callback func([]*xwalpb.WALEntry) error, batchSize int, backwards bool) error {
 	wal.lock.RLock()
 	defer wal.lock.RUnlock()
 
@@ -161,7 +161,7 @@ func (wal *XWAL) Replay(callback func([]*xwalpb.WALEntry) error, batchSize int) 
 	wg.Add(1)
 	go wal.replayEntriesUsingUserCallback(channel, batchSize, callback, &wg)
 
-	if err := wal.backend.Replay(channel); err != nil {
+	if err := wal.backend.Replay(channel, backwards); err != nil {
 		return fmt.Errorf("Error replaying entries: %v", err)
 	}
 	close(channel)
