@@ -103,7 +103,45 @@ func TestReplay(t *testing.T) {
 	assert.NoError(t, err)
 
 	channel := make(chan *xwalpb.WALEntry, 1)
-	err = wal.Replay(channel)
+	err = wal.Replay(channel, false)
+	assert.NoError(t, err)
+	close(channel)
+
+	replayedEntries := make([]*xwalpb.WALEntry, 0)
+	for entry := range channel {
+		replayedEntries = append(replayedEntries, entry)
+	}
+
+	// Verify the replayed entries are correct.
+	assert.Equal(t, len(entries), len(replayedEntries), "The replayed entries length should match the written entries length.")
+}
+
+func TestReplayBackwards(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+	err := wal.Open()
+	assert.NoError(t, err)
+
+	entry1 := &xwalpb.WALEntry{
+		LSN:  1,
+		Data: []byte("test data 1"),
+	}
+	entry1.CRC, err = entry1.Checksum()
+	assert.NoError(t, err)
+
+	entry2 := &xwalpb.WALEntry{
+		LSN:  2,
+		Data: []byte("test data 2"),
+	}
+	entry2.CRC, err = entry2.Checksum()
+	assert.NoError(t, err)
+
+	entries := []*xwalpb.WALEntry{entry1, entry2}
+
+	err = wal.Write(entries)
+	assert.NoError(t, err)
+
+	channel := make(chan *xwalpb.WALEntry, 2)
+	err = wal.Replay(channel, true)
 	assert.NoError(t, err)
 	close(channel)
 

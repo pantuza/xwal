@@ -37,7 +37,7 @@ func TestPeriodicFlush(t *testing.T) {
 		err = wal.Replay(func(entries []*xwalpb.WALEntry) error {
 			entriesReaded = append(entriesReaded, entries...)
 			return nil
-		}, 1)
+		}, 1, false)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 3, len(entriesReaded))

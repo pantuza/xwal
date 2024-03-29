@@ -27,7 +27,7 @@ func BenchmarkLocalFSReplay(b *testing.B) {
 
 		err = wal.Replay(func(entries []*xwalpb.WALEntry) error {
 			return nil
-		}, 5)
+		}, 5, false)
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -36,7 +36,7 @@ func main() {
 			spew.Dump(entry)
 		}
 		return nil // Return nil or an appropriate error value
-	}, 5)
+	}, 5, false)
 	if err != nil {
 		panic(err)
 	}
