@@ -21,11 +21,8 @@ type WALBackendInterface interface {
 	// It must return an error if the entries could not be written.
 	Write(entries []*xwalpb.WALEntry) error
 
-	// Read returns a log entry at a specific index.
-	// If the entry does not exist, an error should be returned.
-	Read(index int64) (xwalpb.WALEntry, error)
-
-	// Replays log from beginning to end, sending each entry to the provided channel
+	// Replays log from beginning to end (FIFO), sending each entry to the provided channel.
+	// If backwards is true, it should replay the log from end to beginning (LIFO).
 	//
 	// Things that Replay should make sure to care of:
 	// - Verify if Checksum matches before sending an entry to replay channel
@@ -36,7 +33,7 @@ type WALBackendInterface interface {
 	// to fill up the channel and then exit.
 	//
 	// In case of any failure, it should return an error to the caller.
-	Replay(channel chan *xwalpb.WALEntry) error
+	Replay(channel chan *xwalpb.WALEntry, backwards bool) error
 
 	// Close performs any necessary cleanup operations to safely terminate the WAL.
 	// For example, it should close any open files and finish any pending writes.
