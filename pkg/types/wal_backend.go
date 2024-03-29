@@ -35,6 +35,15 @@ type WALBackendInterface interface {
 	// In case of any failure, it should return an error to the caller.
 	Replay(channel chan *xwalpb.WALEntry, backwards bool) error
 
+	// Replays log from a given range, sending each entry to the provided channel.
+	// If backwards is true, it should replay the log from end to beginning (LIFO).
+	// The range is inclusive, meaning that it should replay all entries from start to end.
+	// If start is 0, it should replay from the beginning of the log.
+	//
+	// Start and end are the suffixes of the Segments files, not the LSN. They are non negative
+	// values and start must be less than or equal to end.
+	ReplayFromRange(channel chan *xwalpb.WALEntry, backwards bool, start, end uint32) error
+
 	// Close performs any necessary cleanup operations to safely terminate the WAL.
 	// For example, it should close any open files and finish any pending writes.
 	// Think of it as the graceful shutdown of the WAL.
