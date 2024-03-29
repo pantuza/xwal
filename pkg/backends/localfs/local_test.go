@@ -3,6 +3,7 @@ package localfs
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -150,8 +151,125 @@ func TestReplayBackwards(t *testing.T) {
 		replayedEntries = append(replayedEntries, entry)
 	}
 
-	// Verify the replayed entries are correct.
 	assert.Equal(t, len(entries), len(replayedEntries), "The replayed entries length should match the written entries length.")
+	assert.True(t, proto.Equal(entry2, replayedEntries[0]), "The replayed entries should match the last written entry because it was replayed backwards.")
+}
+
+func TestReplayFromRange(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+	err := wal.Open()
+	assert.NoError(t, err)
+
+	entry1 := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data 1")}
+	entry1.CRC, err = entry1.Checksum()
+	assert.NoError(t, err)
+
+	entry2 := &xwalpb.WALEntry{LSN: 2, Data: []byte("test data 2")}
+	entry2.CRC, err = entry2.Checksum()
+	assert.NoError(t, err)
+
+	entries := []*xwalpb.WALEntry{entry1, entry2}
+
+	err = wal.Write(entries)
+	assert.NoError(t, err)
+
+	// make two copies of the segiment file to test the replay from range
+	inputSegmentFile, err := os.OpenFile(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 0)), os.O_RDONLY, 0644)
+	assert.NoError(t, err)
+	defer inputSegmentFile.Close()
+	inputContent, err := io.ReadAll(inputSegmentFile)
+	assert.NoError(t, err)
+
+	segmentFileCopy1, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 1)))
+	assert.NoError(t, err)
+	defer segmentFileCopy1.Close()
+	segmentFileCopy2, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 2)))
+	assert.NoError(t, err)
+	defer segmentFileCopy2.Close()
+
+	_, err = segmentFileCopy1.Write(inputContent)
+	assert.NoError(t, err)
+	_, err = segmentFileCopy2.Write(inputContent)
+	assert.NoError(t, err)
+
+	wal.lastSegmentIndex = 2 // set the last segment index to 2 to test the replay from range
+
+	channel := make(chan *xwalpb.WALEntry, 6)
+	err = wal.ReplayFromRange(channel, false, 1, 2)
+	assert.NoError(t, err)
+	close(channel)
+
+	replayedEntries := make([]*xwalpb.WALEntry, 0)
+	for entry := range channel {
+		replayedEntries = append(replayedEntries, entry)
+	}
+
+	// 2*len(entries) because we are replaying the range 1 to 2 that means we have two files with two entries.
+	assert.Equal(t, 2*len(entries), len(replayedEntries), "The replayed entries length should match the length of only two segments files.")
+}
+
+func TestReplayFromRangeBackwards(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+	err := wal.Open()
+	assert.NoError(t, err)
+
+	entry1 := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data 1")}
+	entry1.CRC, err = entry1.Checksum()
+	assert.NoError(t, err)
+
+	entry2 := &xwalpb.WALEntry{LSN: 2, Data: []byte("test data 2")}
+	entry2.CRC, err = entry2.Checksum()
+	assert.NoError(t, err)
+
+	entries := []*xwalpb.WALEntry{entry1, entry2}
+
+	err = wal.Write(entries)
+	assert.NoError(t, err)
+
+	// make two copies of the segiment file to test the replay from range
+	inputSegmentFile, err := os.OpenFile(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 0)), os.O_RDONLY, 0644)
+	assert.NoError(t, err)
+	defer inputSegmentFile.Close()
+	inputContent, err := io.ReadAll(inputSegmentFile)
+	assert.NoError(t, err)
+
+	segmentFileCopy1, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 1)))
+	assert.NoError(t, err)
+	defer segmentFileCopy1.Close()
+	segmentFileCopy2, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 2)))
+	assert.NoError(t, err)
+	defer segmentFileCopy2.Close()
+
+	_, err = segmentFileCopy1.Write(inputContent)
+	assert.NoError(t, err)
+	_, err = segmentFileCopy2.Write(inputContent)
+	assert.NoError(t, err)
+
+	wal.lastSegmentIndex = 2 // set the last segment index to 2 to test the replay from range
+
+	channel := make(chan *xwalpb.WALEntry, 6)
+	err = wal.ReplayFromRange(channel, true, 0, 1)
+	assert.NoError(t, err)
+	close(channel)
+
+	replayedEntries := make([]*xwalpb.WALEntry, 0)
+	for entry := range channel {
+		replayedEntries = append(replayedEntries, entry)
+	}
+
+	assert.True(t, proto.Equal(entry2, replayedEntries[0]), "The replayed entries should match the last written entry because it was replayed backwards.")
+	// 2*len(entries) because we are replaying the range 1 to 2 that means we have two files with two entries.
+	assert.Equal(t, 2*len(entries), len(replayedEntries), "The replayed entries length should match the length of only two segments files.")
+}
+
+func TestReplayFrominvalidRange(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+	err := wal.Open()
+	assert.NoError(t, err)
+
+	channel := make(chan *xwalpb.WALEntry, 6)
+	err = wal.ReplayFromRange(channel, false, 2, 1)
+	assert.Error(t, err)
 }
 
 func TestGetSegmentsFilesFromRange(t *testing.T) {
@@ -169,11 +287,9 @@ func TestGetSegmentsFilesFromRange(t *testing.T) {
 	err = wal.Write(entries)
 	assert.NoError(t, err)
 
-	// Test getting the segment files from the range.
 	segmentFiles, err := wal.getSegmentsFilesFromRange(0, 0)
 	assert.NoError(t, err)
 
-	// Verify the segment files are correct.
 	expected := []string{filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, 0))}
 	assert.Equal(t, expected, segmentFiles, "The segment files should match the expected segment files.")
 }
