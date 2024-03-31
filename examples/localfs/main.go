@@ -1,0 +1,113 @@
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/pantuza/xwal/internal/xwal"
+	"github.com/pantuza/xwal/protobuf/xwalpb"
+)
+
+const (
+	NumberOfClients = 5
+)
+
+// The wal variable is a global variable that represents the write-ahead log
+var wal *xwal.XWAL
+
+func handlerWithDelay(w http.ResponseWriter, r *http.Request) {
+	delay := time.Duration(rand.Intn(1000)) * time.Millisecond
+
+	time.Sleep(delay) // Simulate work by sleeping
+	fmt.Fprintf(w, "Finished work with %v delay\n", delay)
+}
+
+// startServer initializes and starts the HTTP server
+func startServer() {
+	http.HandleFunc("/route1", handlerWithDelay)
+	http.HandleFunc("/route2", handlerWithDelay)
+	http.HandleFunc("/route3", handlerWithDelay)
+
+	go func() {
+		if err := http.ListenAndServe(":8080", nil); err != nil {
+			panic(err)
+		}
+	}()
+}
+
+// startClient starts an infinite loop of making requests to the server
+func startClient(clientID int, rng *rand.Rand) {
+	client := &http.Client{}
+
+	for {
+		route := fmt.Sprintf("/route%d", rng.Intn(3)+1)
+		url := "http://localhost:8080" + route
+
+		// Sending request to the server
+		resp, err := client.Get(url)
+		if err != nil {
+			fmt.Printf("Client %d Error: %v\n", clientID, err)
+			continue
+		}
+		resp.Body.Close()
+
+		msg := fmt.Sprintf(`{"client": "%d", "route": "%s"}`, clientID, url)
+
+		if err := wal.Write([]byte(msg)); err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("Client %d Requested: %s\n", clientID, url)
+		time.Sleep(1 * time.Second) // Throttle requests
+	}
+}
+
+func myCallback(entries []*xwalpb.WALEntry) error {
+	for _, entry := range entries {
+		fmt.Printf("Replaying entry: %s\n", string(entry.Data))
+	}
+	return nil
+}
+
+func main() {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Initialize the write-ahead log
+	cfg := xwal.NewXWALConfig("")
+	var err error
+	if wal, err = xwal.NewXWAL(cfg); err != nil {
+		panic(err)
+	}
+	defer wal.Close()
+
+	startServer()
+	time.Sleep(1 * time.Second) // Give the server a moment to start
+	fmt.Println("Server started. Press Ctrl+C to stop.")
+
+	var wg sync.WaitGroup
+
+	wg.Add(NumberOfClients)
+	for i := 1; i <= NumberOfClients; i++ {
+		go func(clientID int, rng *rand.Rand) {
+			defer wg.Done()
+			startClient(clientID, rng)
+		}(i, rng)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			time.Sleep(5 * time.Second)
+
+			if err := wal.Replay(myCallback, 5, false); err != nil {
+				panic(err)
+			}
+		}
+	}()
+
+	wg.Wait()
+}
