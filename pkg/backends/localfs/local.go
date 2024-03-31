@@ -124,21 +124,12 @@ func (wal *LocalFSWALBackend) extractSegmentsIndexesFromFiles() error {
 func (wal *LocalFSWALBackend) openCurrentSegmentFile() error {
 	filename := fmt.Sprintf(LFSWALSegmentFileFormat, wal.lastSegmentIndex)
 
-	if wal.lastSegmentIndex == 0 { // Then, we create the first segment file
-
-		file, err := os.Create(filepath.Join(wal.cfg.DirPath, filename))
-		if err != nil {
-			return fmt.Errorf("Error creating the current Segment File '%s'. Error: %s", filename, err)
-		}
-		wal.currentSegmentFile = file
-
-	} else { // We open the last segment file
-		file, err := os.OpenFile(filepath.Join(wal.cfg.DirPath, filename), os.O_APPEND|os.O_WRONLY, LFSDefaultDirPermission)
-		if err != nil {
-			return fmt.Errorf("Error opening the current Segment File '%s'. Error: %s", filename, err)
-		}
-		wal.currentSegmentFile = file
+	// If file does not exist, it will be created. Otherwise, it will be opened.
+	file, err := os.OpenFile(filepath.Join(wal.cfg.DirPath, filename), os.O_APPEND|os.O_WRONLY|os.O_CREATE, LFSDefaultDirPermission)
+	if err != nil {
+		return fmt.Errorf("Error opening the current Segment File '%s'. Error: %s", filename, err)
 	}
+	wal.currentSegmentFile = file
 
 	return nil
 }
