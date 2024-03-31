@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/pantuza/xwal/pkg/types"
@@ -30,11 +31,8 @@ type LocalFSConfig struct {
 	// Name of the directory where WAL files will be stored
 	DirPath string `yaml:"dirPath"`
 
-	// Size in megabytes of each segment inside files
-	SegmentsSize int `yaml:"segmentsSize"`
-
 	// Size in megabytes of each file inside the WAL
-	FileSize int `yaml:"fileSize"`
+	SegmentsFileSize int `yaml:"segmentsFileSize"`
 
 	// Interval to clean garbage logs
 	CleanLogsInterval time.Duration `yaml:"cleanLogsInterval"`
@@ -44,6 +42,8 @@ type LocalFSWALBackend struct {
 	cfg *LocalFSConfig
 
 	ctx               context.Context
+	cancel            context.CancelFunc
+	waitGroup         sync.WaitGroup
 	cleanLogsInterval *time.Ticker
 
 	firstSegmentIndex uint32
@@ -58,9 +58,12 @@ func NewLocalFSWALBackend(cfg *LocalFSConfig) *LocalFSWALBackend {
 		cfg.CleanLogsInterval = 1 * time.Minute // Default interval to clean garbage logs
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	return &LocalFSWALBackend{
 		cfg:               cfg,
-		ctx:               context.Background(),
+		ctx:               ctx,
+		cancel:            cancel,
+		waitGroup:         sync.WaitGroup{},
 		cleanLogsInterval: time.NewTicker(cfg.CleanLogsInterval),
 		firstSegmentIndex: 0,
 		lastSegmentIndex:  0,
@@ -83,7 +86,8 @@ func (wal *LocalFSWALBackend) Open() error {
 		return err
 	}
 
-	go wal.cleanGarbageLogs(wal.ctx)
+	wal.waitGroup.Add(1)
+	go wal.cleanGarbageLogs()
 
 	return nil
 }
@@ -312,7 +316,9 @@ func (wal *LocalFSWALBackend) getLastLogSequencyNumber() error {
 	return nil
 }
 
-func (wal *LocalFSWALBackend) cleanGarbageLogs(ctx context.Context) {
+func (wal *LocalFSWALBackend) cleanGarbageLogs() {
+	defer wal.waitGroup.Done()
+
 	for {
 		select {
 		case <-wal.cleanLogsInterval.C:
@@ -321,8 +327,13 @@ func (wal *LocalFSWALBackend) cleanGarbageLogs(ctx context.Context) {
 				fmt.Printf("Error cleaning Garbage Logs from inside goroutine. Error: %s", err)
 			}
 
-		case <-ctx.Done():
-			return
+		case <-wal.ctx.Done():
+			fmt.Println("Cleaning Garbage Logs before exiting")
+			if err := wal.deleteStaleFiles(); err != nil {
+				fmt.Printf("Error cleaning Garbage Logs before exiting. Error: %s", err)
+			}
+
+			return // This ends this Goroutine
 		}
 	}
 }
@@ -343,15 +354,17 @@ func (wal *LocalFSWALBackend) deleteStaleFiles() error {
 }
 
 func (wal *LocalFSWALBackend) Close() error {
+	fmt.Println("Closing LocalFS WAL Backend")
+
 	// closes current segment file
 	if err := wal.currentSegmentFile.Close(); err != nil {
 		return fmt.Errorf("LocalFSWALBackend shutdown: Error closing current segment file. Error: %s", err)
 	}
 
-	// stops the clean logs interval
 	wal.cleanLogsInterval.Stop()
-	wal.ctx.Done()
+	wal.cancel()
 
+	wal.waitGroup.Wait()
 	return nil
 }
 
