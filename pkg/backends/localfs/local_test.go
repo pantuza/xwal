@@ -23,9 +23,8 @@ func setupLocalFSWALBackend() (*LocalFSWALBackend, string) {
 	}
 
 	cfg := LocalFSConfig{
-		DirPath:      dir,
-		SegmentsSize: 1,
-		FileSize:     1,
+		DirPath:          dir,
+		SegmentsFileSize: 1,
 	}
 
 	wal := NewLocalFSWALBackend(&cfg)
