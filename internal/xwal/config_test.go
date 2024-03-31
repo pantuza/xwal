@@ -24,8 +24,7 @@ func TestNewXWALConfigDefaults(t *testing.T) {
 
 	localConfig := config.BackendConfig.LocalFS
 	assert.Equal(t, "/tmp/xwal", localConfig.DirPath)
-	assert.Equal(t, 2, localConfig.SegmentsSize)
-	assert.Equal(t, 1000, localConfig.FileSize)
+	assert.Equal(t, 1000, localConfig.SegmentsFileSize)
 }
 
 // TestNewXWALConfigFromFile tests loading configuration values from a provided YAML file.
@@ -39,8 +38,7 @@ flushFrequency: 2s
 backends:
   localfs:
     dirPath: "/tmp/test_xwal"
-    segmentsSize: 4
-    fileSize: 2000
+    segmentsFileSize: 2000
 `)
 	tmpFile, err := os.CreateTemp("", "test_xwal_config.yaml")
 	assert.NoError(t, err)
@@ -61,6 +59,5 @@ backends:
 
 	localConfig := config.BackendConfig.LocalFS
 	assert.Equal(t, "/tmp/test_xwal", localConfig.DirPath)
-	assert.Equal(t, 4, localConfig.SegmentsSize)
-	assert.Equal(t, 2000, localConfig.FileSize)
+	assert.Equal(t, 2000, localConfig.SegmentsFileSize)
 }
