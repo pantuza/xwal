@@ -1,6 +1,7 @@
 package xwal
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -12,7 +13,13 @@ func TestPeriodicFlush(t *testing.T) {
 	t.Run("PeriodicFlush", func(t *testing.T) {
 		t.Parallel() // This test is now Parallel
 
+		// Create a temporary directory for WAL files.
+		dir, err := os.MkdirTemp("", "wal_test")
+		if err != nil {
+			panic(err)
+		}
 		cfg := NewXWALConfig("")
+		cfg.BackendConfig.LocalFS.DirPath = dir
 		cfg.BufferSize = 1
 		cfg.BufferEntriesLength = 5
 		cfg.FlushFrequency = 100 * time.Millisecond
