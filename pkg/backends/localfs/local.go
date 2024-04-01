@@ -197,18 +197,27 @@ func (wal *LocalFSWALBackend) Write(entries []*xwalpb.WALEntry) error {
 }
 
 // rotateSegmentsFileIfNeeded checks if the current segment file reached the maximum size.
-// If so, it closes the current segment file and opens a new one.
-// It also increments the last segment index.
+// If so, call the rotate method
 func (wal *LocalFSWALBackend) rotateSegmentsFileIfNeeded() error {
 	fileInfo, _ := wal.currentSegmentFile.Stat()
 
 	if fileInfo.Size() >= int64(wal.cfg.SegmentsFileSize)*1024*1024 {
-
-		wal.currentSegmentFile.Close()
-		wal.lastSegmentIndex++
-		if err := wal.openCurrentSegmentFile(); err != nil {
-			return fmt.Errorf("Error trying to rotate current segment file (%d). Error: %s", wal.lastSegmentIndex, err)
+		if err := wal.rotateSegmentsFile(); err != nil {
+			return err
 		}
+	}
+
+	return nil
+}
+
+// Rotates current segments file. It closes the actual segment file and opens a new one.
+// It also increments the last segment index.
+func (wal *LocalFSWALBackend) rotateSegmentsFile() error {
+	wal.currentSegmentFile.Close()
+	wal.lastSegmentIndex++
+
+	if err := wal.openCurrentSegmentFile(); err != nil {
+		return fmt.Errorf("Error trying to rotate current segment file (%d). Error: %s", wal.lastSegmentIndex, err)
 	}
 
 	return nil
@@ -304,6 +313,14 @@ func (wal *LocalFSWALBackend) replaySegments(segmentsFiles []string, channel cha
 		if err := os.Rename(segmentFile, segmentFile+LFSGarbageFileExtension); err != nil {
 			return fmt.Errorf("Error renaming segment file to garbage file. Error: %s", err)
 		}
+
+		// Once we have replayed everything, we should rotate the current segment file.
+		if err := wal.rotateSegmentsFile(); err != nil {
+			return fmt.Errorf("Error rotating current segment file after replaying wal. Error: %s", err)
+		}
+
+		// update the first segment file to be the new current segment file so next time we replay we start from it
+		wal.firstSegmentIndex = wal.lastSegmentIndex
 	}
 
 	return nil
