@@ -331,3 +331,97 @@ func TestCleanLogs(t *testing.T) {
 	_, err = os.Stat(garbageFile.Name())
 	assert.Error(t, err)
 }
+
+func TestRotateSegmentFile(t *testing.T) {
+	wal, dir := setupLocalFSWALBackend()
+
+	entry := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data"), CRC: 1}
+	entries := []*xwalpb.WALEntry{entry}
+
+	err := wal.Write(entries)
+	assert.NoError(t, err)
+
+	err = wal.rotateSegmentsFile()
+	assert.NoError(t, err)
+
+	// Verify the segment file was rotated correctly.
+	_, err = os.Stat(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, 1)))
+	assert.NoError(t, err)
+}
+
+func TestExtractSegmentIndexShouldReturnError(t *testing.T) {
+	wal, dir := setupLocalFSWALBackend()
+
+	entry := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data"), CRC: 1}
+	entries := []*xwalpb.WALEntry{entry}
+
+	err := wal.Write(entries)
+	assert.NoError(t, err)
+
+	segmentFile := filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, 0))
+	newSegmentFile := segmentFile + LFSGarbageFileExtension
+	err = os.Rename(segmentFile, newSegmentFile)
+	assert.NoError(t, err)
+
+	_, err = wal.extractSegmentIndex(newSegmentFile)
+	assert.ErrorIs(t, err, ErrInvalidSegmentIndex)
+}
+
+func TestFirstSegmentIndexIsThefirstFileInTheSequence(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	if err != nil {
+		panic(err)
+	}
+
+	cfg := LocalFSConfig{
+		DirPath: dir,
+	}
+
+	wal := NewLocalFSWALBackend(&cfg)
+
+	// create 3 files in the directory using os.Create
+	for i := 50; i < 53; i++ {
+		file, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
+		assert.NoError(t, err)
+		file.Close()
+	}
+
+	err = wal.extractSegmentsIndexesFromFiles()
+	assert.NoError(t, err)
+
+	assert.Equal(t, uint32(50), wal.firstSegmentIndex)
+	assert.Equal(t, uint32(52), wal.lastSegmentIndex)
+}
+
+func TestFirstSegmentIndexSkipsGarbageFiles(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	if err != nil {
+		panic(err)
+	}
+
+	cfg := LocalFSConfig{
+		DirPath: dir,
+	}
+
+	wal := NewLocalFSWALBackend(&cfg)
+
+	// create 2 garbage files in the directory using os.Create
+	for i := 48; i < 50; i++ {
+		file, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, i)+LFSGarbageFileExtension))
+		assert.NoError(t, err)
+		file.Close()
+	}
+
+	// create 3 files in the directory using os.Create
+	for i := 50; i < 53; i++ {
+		file, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
+		assert.NoError(t, err)
+		file.Close()
+	}
+
+	err = wal.extractSegmentsIndexesFromFiles()
+	assert.NoError(t, err)
+
+	assert.Equal(t, uint32(50), wal.firstSegmentIndex)
+	assert.Equal(t, uint32(52), wal.lastSegmentIndex)
+}
