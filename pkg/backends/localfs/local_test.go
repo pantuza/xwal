@@ -37,30 +37,20 @@ func setupLocalFSWALBackend() (*LocalFSWALBackend, string) {
 }
 
 func TestOpen(t *testing.T) {
-	wal, dir := setupLocalFSWALBackend()
-
-	// Test opening the WAL.
-	err := wal.Open()
-	assert.NoError(t, err)
+	_, dir := setupLocalFSWALBackend()
 
 	// Verify the directory was created.
-	_, err = os.Stat(dir)
+	_, err := os.Stat(dir)
 	assert.NoError(t, err)
 }
 
 func TestWrite(t *testing.T) {
 	wal, dir := setupLocalFSWALBackend()
-	err := wal.Open()
-	assert.NoError(t, err)
 
-	entry := &xwalpb.WALEntry{
-		LSN:  1,
-		Data: []byte("test data"),
-		CRC:  1,
-	}
+	entry := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data"), CRC: 1}
 	entries := []*xwalpb.WALEntry{entry}
 
-	err = wal.Write(entries)
+	err := wal.Write(entries)
 	assert.NoError(t, err)
 
 	// Verify the entry was written correctly.
@@ -87,13 +77,9 @@ func TestWrite(t *testing.T) {
 
 func TestReplay(t *testing.T) {
 	wal, _ := setupLocalFSWALBackend()
-	err := wal.Open()
-	assert.NoError(t, err)
 
-	entry := &xwalpb.WALEntry{
-		LSN:  1,
-		Data: []byte("test data"),
-	}
+	var err error
+	entry := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data")}
 	entry.CRC, err = entry.Checksum()
 	assert.NoError(t, err)
 
@@ -118,20 +104,13 @@ func TestReplay(t *testing.T) {
 
 func TestReplayBackwards(t *testing.T) {
 	wal, _ := setupLocalFSWALBackend()
-	err := wal.Open()
-	assert.NoError(t, err)
 
-	entry1 := &xwalpb.WALEntry{
-		LSN:  1,
-		Data: []byte("test data 1"),
-	}
+	var err error
+	entry1 := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data 1")}
 	entry1.CRC, err = entry1.Checksum()
 	assert.NoError(t, err)
 
-	entry2 := &xwalpb.WALEntry{
-		LSN:  2,
-		Data: []byte("test data 2"),
-	}
+	entry2 := &xwalpb.WALEntry{LSN: 2, Data: []byte("test data 2")}
 	entry2.CRC, err = entry2.Checksum()
 	assert.NoError(t, err)
 
@@ -156,9 +135,8 @@ func TestReplayBackwards(t *testing.T) {
 
 func TestReplayFromRange(t *testing.T) {
 	wal, _ := setupLocalFSWALBackend()
-	err := wal.Open()
-	assert.NoError(t, err)
 
+	var err error
 	entry1 := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data 1")}
 	entry1.CRC, err = entry1.Checksum()
 	assert.NoError(t, err)
@@ -209,9 +187,8 @@ func TestReplayFromRange(t *testing.T) {
 
 func TestReplayFromRangeBackwards(t *testing.T) {
 	wal, _ := setupLocalFSWALBackend()
-	err := wal.Open()
-	assert.NoError(t, err)
 
+	var err error
 	entry1 := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data 1")}
 	entry1.CRC, err = entry1.Checksum()
 	assert.NoError(t, err)
@@ -263,27 +240,19 @@ func TestReplayFromRangeBackwards(t *testing.T) {
 
 func TestReplayFrominvalidRange(t *testing.T) {
 	wal, _ := setupLocalFSWALBackend()
-	err := wal.Open()
-	assert.NoError(t, err)
 
 	channel := make(chan *xwalpb.WALEntry, 6)
-	err = wal.ReplayFromRange(channel, false, 2, 1)
+	err := wal.ReplayFromRange(channel, false, 2, 1)
 	assert.Error(t, err)
 }
 
 func TestGetSegmentsFilesFromRange(t *testing.T) {
 	wal, dir := setupLocalFSWALBackend()
-	err := wal.Open()
-	assert.NoError(t, err)
 
-	entry := &xwalpb.WALEntry{
-		LSN:  1,
-		Data: []byte("test data"),
-		CRC:  1,
-	}
+	entry := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data"), CRC: 1}
 	entries := []*xwalpb.WALEntry{entry}
 
-	err = wal.Write(entries)
+	err := wal.Write(entries)
 	assert.NoError(t, err)
 
 	segmentFiles, err := wal.getSegmentsFilesFromRange(0, 0)
@@ -295,17 +264,11 @@ func TestGetSegmentsFilesFromRange(t *testing.T) {
 
 func TestReadEntriesFromFile(t *testing.T) {
 	wal, _ := setupLocalFSWALBackend()
-	err := wal.Open()
-	assert.NoError(t, err)
 
-	entry := &xwalpb.WALEntry{
-		LSN:  1,
-		Data: []byte("test data"),
-		CRC:  1,
-	}
+	entry := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data"), CRC: 1}
 	entries := []*xwalpb.WALEntry{entry}
 
-	err = wal.Write(entries)
+	err := wal.Write(entries)
 	assert.NoError(t, err)
 
 	filename := fmt.Sprintf(LFSWALSegmentFileFormat, 0)
@@ -322,22 +285,12 @@ func TestReadEntriesFromFile(t *testing.T) {
 
 func TestGetLastSequencyNumber(t *testing.T) {
 	wal, _ := setupLocalFSWALBackend()
-	err := wal.Open()
-	assert.NoError(t, err)
 
-	entry1 := &xwalpb.WALEntry{
-		LSN:  1,
-		Data: []byte("test data"),
-		CRC:  1,
-	}
-	entry2 := &xwalpb.WALEntry{
-		LSN:  2,
-		Data: []byte("test data"),
-		CRC:  1,
-	}
+	entry1 := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data"), CRC: 1}
+	entry2 := &xwalpb.WALEntry{LSN: 2, Data: []byte("test data"), CRC: 1}
 	entries := []*xwalpb.WALEntry{entry1, entry2}
 
-	err = wal.Write(entries)
+	err := wal.Write(entries)
 	assert.NoError(t, err)
 
 	err = wal.getLastLogSequencyNumber()
@@ -366,9 +319,6 @@ func TestGetLastSequencyNumberWithNoCurrentSegmentFile(t *testing.T) {
 func TestCleanLogs(t *testing.T) {
 	wal, _ := setupLocalFSWALBackend()
 	wal.cfg.CleanLogsInterval = 1 * time.Millisecond
-
-	err := wal.Open()
-	assert.NoError(t, err)
 
 	// create a fake file with .garbage extension
 	// to be cleaned by calling directly the cleanGarbageLogs method
