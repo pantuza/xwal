@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -54,7 +55,8 @@ func startClient(clientID int, rng *rand.Rand) {
 		}
 		resp.Body.Close()
 
-		msg := fmt.Sprintf(`{"client": "%d", "route": "%s"}`, clientID, url)
+		longString, _ := generateRandomString(1024)
+		msg := fmt.Sprintf(`{"client": "%d", "route": "%s", "long_string": "%s"}`, clientID, url, longString)
 
 		if err := wal.Write([]byte(msg)); err != nil {
 			panic(err)
@@ -63,6 +65,17 @@ func startClient(clientID int, rng *rand.Rand) {
 		fmt.Printf("Client %d Requested: %s\n", clientID, url)
 		time.Sleep(1 * time.Second) // Throttle requests
 	}
+}
+
+// helper function to simply simulate a long string
+func generateRandomString(n int) (string, error) {
+	b := make([]byte, n)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+
+	return base64.StdEncoding.EncodeToString(b), nil
 }
 
 func myCallback(entries []*xwalpb.WALEntry) error {
