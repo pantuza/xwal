@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	NumberOfClients = 5
+	NumberOfClients = 10
+
+	ReplayFrequency = 30 * time.Second
 )
 
 // The wal variable is a global variable that represents the write-ahead log
@@ -114,7 +116,7 @@ func main() {
 	go func() {
 		defer wg.Done()
 		for {
-			time.Sleep(5 * time.Second)
+			time.Sleep(ReplayFrequency)
 
 			if err := wal.Replay(myCallback, 5, false); err != nil {
 				panic(err)
