@@ -3,8 +3,10 @@ package localfs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -26,6 +28,9 @@ const (
 	// Files with this extension are considered garbage and will be deleted
 	LFSGarbageFileExtension = ".garbage"
 )
+
+// Error message for when trying to extract an invalid segment index from a .garbage file
+var ErrInvalidSegmentIndex = errors.New("Invalid segment index. The file is a .garbage file")
 
 type LocalFSConfig struct {
 	// Name of the directory where WAL files will be stored
@@ -109,8 +114,18 @@ func (wal *LocalFSWALBackend) extractSegmentsIndexesFromFiles() error {
 		return fmt.Errorf("Error Opening WAL. Could not read directory entries. Error: %s", err)
 	}
 
+	wal.firstSegmentIndex = math.MaxUint32
+	wal.lastSegmentIndex = 0
+
 	for _, file := range files {
-		index := wal.extractSegmentIndex(file.Name())
+
+		index, err := wal.extractSegmentIndex(file.Name())
+		if err == ErrInvalidSegmentIndex {
+			// Skip garbage files but update the first segment file with the next index right after the garbage file
+			wal.firstSegmentIndex = index + 1
+			continue
+		}
+
 		if index > wal.lastSegmentIndex {
 			wal.lastSegmentIndex = index
 		}
@@ -118,6 +133,13 @@ func (wal *LocalFSWALBackend) extractSegmentsIndexesFromFiles() error {
 			wal.firstSegmentIndex = index
 		}
 	}
+
+	if wal.firstSegmentIndex == math.MaxUint32 {
+		// If firstSegmentIndex keeps being the maximum value,
+		// it means there are no segment files and we should start from 0
+		wal.firstSegmentIndex = 0
+	}
+
 	return nil
 }
 
@@ -136,10 +158,16 @@ func (wal *LocalFSWALBackend) openCurrentSegmentFile() error {
 
 // Segments files names format is: wal_00000. The last 5 characters are the index.
 // This function extracts the segment Index.
-func (wal *LocalFSWALBackend) extractSegmentIndex(filename string) uint32 {
+func (wal *LocalFSWALBackend) extractSegmentIndex(filename string) (uint32, error) {
 	var index uint32
 	fmt.Sscanf(filename, LFSWALSegmentFileFormat, &index)
-	return index
+
+	// Garbage files should be skipped and not considered for the segment index
+	if filepath.Ext(filename) == LFSGarbageFileExtension {
+		return index, ErrInvalidSegmentIndex
+	}
+
+	return index, nil
 }
 
 // Write writes the entries to the current segment file.
