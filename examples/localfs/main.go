@@ -57,7 +57,7 @@ func startClient(clientID int, rng *rand.Rand) {
 		}
 		resp.Body.Close()
 
-		longString, _ := generateRandomString(1024)
+		longString, _ := generateRandomString(1024 * 50) // 50 Kb
 		msg := fmt.Sprintf(`{"client": "%d", "route": "%s", "long_string": "%s"}`, clientID, url, longString)
 
 		if err := wal.Write([]byte(msg)); err != nil {
@@ -82,7 +82,7 @@ func generateRandomString(n int) (string, error) {
 
 func myCallback(entries []*xwalpb.WALEntry) error {
 	for _, entry := range entries {
-		fmt.Printf("Replaying entry: %s\n", string(entry.Data))
+		fmt.Printf("Replaying entry: %d\n", entry.GetLSN())
 	}
 	return nil
 }
