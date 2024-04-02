@@ -313,15 +313,15 @@ func (wal *LocalFSWALBackend) replaySegments(segmentsFiles []string, channel cha
 		if err := os.Rename(segmentFile, segmentFile+LFSGarbageFileExtension); err != nil {
 			return fmt.Errorf("Error renaming segment file to garbage file. Error: %s", err)
 		}
-
-		// Once we have replayed everything, we should rotate the current segment file.
-		if err := wal.rotateSegmentsFile(); err != nil {
-			return fmt.Errorf("Error rotating current segment file after replaying wal. Error: %s", err)
-		}
-
-		// update the first segment file to be the new current segment file so next time we replay we start from it
-		wal.firstSegmentIndex = wal.lastSegmentIndex
 	}
+
+	// Once we have replayed everything, we should rotate the current segment file.
+	if err := wal.rotateSegmentsFile(); err != nil {
+		return fmt.Errorf("Error rotating current segment file after replaying wal. Error: %s", err)
+	}
+
+	// update the first segment file to be the new current segment file so next time we replay we start from it
+	wal.firstSegmentIndex = wal.lastSegmentIndex
 
 	return nil
 }
