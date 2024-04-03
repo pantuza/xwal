@@ -3,7 +3,10 @@ package xwal
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/pantuza/xwal/internal/buffer"
@@ -36,6 +39,7 @@ func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
 
 	wal.loadBackend()
 	go wal.PeriodicFlush()
+	wal.osSignalHandler()
 
 	return wal, nil
 }
@@ -201,6 +205,18 @@ func (wal *XWAL) replayEntriesUsingUserCallback(channel chan *xwalpb.WALEntry, b
 			return
 		}
 	}
+}
+
+func (wal *XWAL) osSignalHandler() {
+	signals := make(chan os.Signal, 1)
+
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		sig := <-signals // Block until a signal is received
+		fmt.Println("Received signal:", sig)
+		wal.Close()
+	}()
 }
 
 func (wal *XWAL) Close() error {
