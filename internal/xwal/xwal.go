@@ -16,13 +16,32 @@ import (
 )
 
 type XWAL struct {
-	cfg           *XWALConfig
-	lock          sync.RWMutex
-	ctx           context.Context
-	cancel        context.CancelFunc
+	// Configuration for the xWAL instance. It takes in consideration the backend config
+	cfg *XWALConfig
+
+	// Lock used to control concurrency reads and writes to the WAL Backend
+	lock sync.RWMutex
+
+	// WaitGroup to control the number of pending writes
+	wg sync.WaitGroup
+
+	// Flag to control if the xWAL is closed. No more writes are allowed when it becomes true
+	closed bool
+
+	// Context and cancel function to control the xWAL lifecycle
+	ctx context.Context
+
+	// Cancel function to stop the xWAL lifecycle
+	cancel context.CancelFunc
+
+	// Ticker to control the flush frequency
 	FlushInterval *time.Ticker
-	buffer        *buffer.InMemoryBuffer
-	backend       types.WALBackendInterface
+
+	// In Memory Buffer to store entries before flushing to the backend
+	buffer *buffer.InMemoryBuffer
+
+	// Backend to store the WAL entries. It implements the WALBackendInterface
+	backend types.WALBackendInterface
 }
 
 func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
