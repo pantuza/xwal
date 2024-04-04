@@ -50,3 +50,84 @@ func TestPeriodicFlush(t *testing.T) {
 		assert.Equal(t, 3, len(entriesReaded))
 	})
 }
+
+func TestWriteWhenTheWalIsAlreadyClosed(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	assert.NoError(t, err)
+
+	cfg := NewXWALConfig("")
+	cfg.BackendConfig.LocalFS.DirPath = dir
+	wal, err := NewXWAL(cfg)
+	assert.NoError(t, err)
+
+	err = wal.Close()
+	assert.NoError(t, err)
+
+	data := []byte("fake data")
+	err = wal.Write(data)
+	assert.Error(t, err)
+}
+
+func TestReplayWhenTheWalIsAlreadyClosed(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	assert.NoError(t, err)
+
+	cfg := NewXWALConfig("")
+	cfg.BackendConfig.LocalFS.DirPath = dir
+	wal, err := NewXWAL(cfg)
+	assert.NoError(t, err)
+
+	err = wal.Close()
+	assert.NoError(t, err)
+
+	err = wal.Replay(func(entries []*xwalpb.WALEntry) error {
+		return nil
+	}, 1, false)
+	assert.Error(t, err)
+}
+
+func TestWriteOnXWAL(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	assert.NoError(t, err)
+
+	cfg := NewXWALConfig("")
+	cfg.BackendConfig.LocalFS.DirPath = dir
+	wal, err := NewXWAL(cfg)
+	assert.NoError(t, err)
+
+	data := []byte("fake data")
+	err = wal.Write(data)
+	assert.NoError(t, err)
+
+	err = wal.Close()
+	assert.NoError(t, err)
+}
+
+func TestReplayOnXWAL(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	assert.NoError(t, err)
+
+	cfg := NewXWALConfig("")
+	cfg.BackendConfig.LocalFS.DirPath = dir
+	cfg.FlushFrequency = 50 * time.Millisecond
+	wal, err := NewXWAL(cfg)
+	assert.NoError(t, err)
+
+	data := []byte("fake data")
+	err = wal.Write(data)
+	assert.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond) // wait for the periodic flush to run
+	entriesReaded := make([]*xwalpb.WALEntry, 0, 1)
+
+	err = wal.Replay(func(entries []*xwalpb.WALEntry) error {
+		entriesReaded = append(entriesReaded, entries...)
+		return nil
+	}, 1, false)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(entriesReaded))
+
+	err = wal.Close()
+	assert.NoError(t, err)
+}
