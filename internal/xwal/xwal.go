@@ -184,6 +184,10 @@ func (wal *XWAL) flushToBackend() error {
 }
 
 func (wal *XWAL) Replay(callback func([]*xwalpb.WALEntry) error, batchSize int, backwards bool) error {
+	if wal.closed {
+		return fmt.Errorf("xWAL is closed. No more Replays are allowed")
+	}
+
 	wal.lock.RLock()
 	defer wal.lock.RUnlock()
 
@@ -248,6 +252,11 @@ func (wal *XWAL) osSignalHandler() {
 }
 
 func (wal *XWAL) Close() error {
+	if wal.closed {
+		fmt.Println("xWAL is already closed")
+		return nil
+	}
+
 	wal.lock.Lock()
 	defer wal.lock.Unlock()
 
@@ -263,4 +272,8 @@ func (wal *XWAL) Close() error {
 	wal.closed = true // Now xWAL is closed. No more writes are allowed
 
 	return wal.backend.Close()
+}
+
+func (wal *XWAL) IsClosed() bool {
+	return wal.closed
 }
