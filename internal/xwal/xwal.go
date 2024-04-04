@@ -50,6 +50,8 @@ func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
 	wal := &XWAL{
 		cfg:           cfg,
 		lock:          sync.RWMutex{},
+		wg:            sync.WaitGroup{},
+		closed:        false,
 		ctx:           ctx,
 		cancel:        cancel,
 		FlushInterval: time.NewTicker(cfg.FlushFrequency),
@@ -95,8 +97,15 @@ func (wal *XWAL) PeriodicFlush() {
 }
 
 func (wal *XWAL) Write(data []byte) error {
+	if wal.closed {
+		return fmt.Errorf("xWAL is closed. No more writes are allowed.")
+	}
+
 	wal.lock.Lock()
 	defer wal.lock.Unlock()
+
+	wal.wg.Add(1)
+	defer wal.wg.Done()
 
 	entry, err := wal.createWALEntry(data)
 	if err != nil {
@@ -239,9 +248,19 @@ func (wal *XWAL) osSignalHandler() {
 }
 
 func (wal *XWAL) Close() error {
+	wal.lock.Lock()
+	defer wal.lock.Unlock()
+
 	fmt.Println("Closing xWAL")
 
-	wal.cancel()
+	// We must stop the interval before anything to avoid trying to flush after closing the backend
 	wal.FlushInterval.Stop()
+	wal.cancel()
+
+	// Wait for all pending writes to finish
+	wal.wg.Wait()
+
+	wal.closed = true // Now xWAL is closed. No more writes are allowed
+
 	return wal.backend.Close()
 }
