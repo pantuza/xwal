@@ -61,7 +61,8 @@ func startClient(clientID int, rng *rand.Rand) {
 		msg := fmt.Sprintf(`{"client": "%d", "route": "%s", "long_string": "%s"}`, clientID, url, longString)
 
 		if err := wal.Write([]byte(msg)); err != nil {
-			panic(err)
+			fmt.Println(err)
+			return // Stop the client
 		}
 
 		fmt.Printf("Client %d Requested: %s\n", clientID, url)
@@ -117,13 +118,19 @@ func main() {
 	go func() {
 		defer wg.Done()
 		for {
+			if wal.IsClosed() {
+				return
+			}
+
 			time.Sleep(ReplayFrequency)
 
 			if err := wal.Replay(myCallback, 5, false); err != nil {
-				panic(err)
+				fmt.Println(err)
+				return
 			}
 		}
 	}()
 
 	wg.Wait()
+	fmt.Println("Exiting localfs example code..")
 }
