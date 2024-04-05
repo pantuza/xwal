@@ -211,6 +211,29 @@ func (wal *XWAL) Replay(callback ReplayCallbackFunc, batchSize int, backwards bo
 	return nil
 }
 
+func (wal *XWAL) ReplayFromRange(callback ReplayCallbackFunc, batchSize int, backwards bool, start, end uint32) error {
+	if wal.closed {
+		return fmt.Errorf("xWAL is closed. No more Replays are allowed")
+	}
+
+	wal.lock.RLock()
+	defer wal.lock.RUnlock()
+
+	channel := make(chan *xwalpb.WALEntry, 1)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go wal.replayEntriesUsingUserCallback(channel, batchSize, callback, &wg)
+
+	if err := wal.backend.ReplayFromRange(channel, backwards, start, end); err != nil {
+		return fmt.Errorf("Error replaying entries: %v", err)
+	}
+	close(channel)
+
+	wg.Wait()
+	return nil
+}
+
 // Async function to read batchSize entries from a channel and call the callback function
 func (wal *XWAL) replayEntriesUsingUserCallback(channel chan *xwalpb.WALEntry, batchSize int, callback func([]*xwalpb.WALEntry) error, wg *sync.WaitGroup) {
 	entries := make([]*xwalpb.WALEntry, 0, batchSize)
