@@ -15,6 +15,11 @@ import (
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 )
 
+// The replay callback function signature
+type ReplayCallbackFunc func([]*xwalpb.WALEntry) error
+
+// XWAL is the main struct that implements the WAL and control
+// the lifecycle of the WAL. It is responsible to control the WAL Backend
 type XWAL struct {
 	// Configuration for the xWAL instance. It takes in consideration the backend config
 	cfg *XWALConfig
@@ -183,7 +188,7 @@ func (wal *XWAL) flushToBackend() error {
 	return nil
 }
 
-func (wal *XWAL) Replay(callback func([]*xwalpb.WALEntry) error, batchSize int, backwards bool) error {
+func (wal *XWAL) Replay(callback ReplayCallbackFunc, batchSize int, backwards bool) error {
 	if wal.closed {
 		return fmt.Errorf("xWAL is closed. No more Replays are allowed")
 	}
