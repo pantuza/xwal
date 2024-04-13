@@ -102,6 +102,12 @@ check: _clrscr tidy lint test bench build run ## Runs all checks before sending 
 	@echo "$(BROWN)--\n$(OK) $(GREEN)All checks have passed$(CLRRST)"
 
 
+.PHONY: run_localfs_example
+run_localfs_example: ./examples/localfs/main.go _clrscr ## Runs xWAL with LocalFS backend example
+	$(call title, Running xWAL with LocalFS backend example..)
+	@go run $<
+
+
 .PHONY: _clrscr
 _clrscr:
 	@clear
