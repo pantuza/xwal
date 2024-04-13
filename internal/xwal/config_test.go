@@ -39,6 +39,7 @@ backends:
   localfs:
     dirPath: "/tmp/test_xwal"
     segmentsFileSize: 2000
+    segmentsDirSizeGB: 3
 `)
 	tmpFile, err := os.CreateTemp("", "test_xwal_config.yaml")
 	assert.NoError(t, err)
@@ -60,4 +61,5 @@ backends:
 	localConfig := config.BackendConfig.LocalFS
 	assert.Equal(t, "/tmp/test_xwal", localConfig.DirPath)
 	assert.Equal(t, 2000, localConfig.SegmentsFileSize)
+	assert.Equal(t, uint32(3), localConfig.SegmentsDirSizeGB)
 }
