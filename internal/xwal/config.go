@@ -65,6 +65,7 @@ func loadDefaultConfigValues() *XWALConfig {
 			LocalFS: &localfs.LocalFSConfig{
 				DirPath:           "/tmp/xwal",
 				SegmentsFileSize:  1000,
+				SegmentsDirSizeGB: 20,
 				CleanLogsInterval: 1 * time.Minute,
 			},
 		},
