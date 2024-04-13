@@ -23,8 +23,9 @@ func setupLocalFSWALBackend() (*LocalFSWALBackend, string) {
 	}
 
 	cfg := LocalFSConfig{
-		DirPath:          dir,
-		SegmentsFileSize: 1,
+		DirPath:           dir,
+		SegmentsFileSize:  1,
+		SegmentsDirSizeGB: 1,
 	}
 
 	wal := NewLocalFSWALBackend(&cfg)
@@ -424,4 +425,67 @@ func TestFirstSegmentIndexSkipsGarbageFiles(t *testing.T) {
 
 	assert.Equal(t, uint32(50), wal.firstSegmentIndex)
 	assert.Equal(t, uint32(52), wal.lastSegmentIndex)
+}
+
+func TestGetDirectorySize(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	if err != nil {
+		panic(err)
+	}
+
+	cfg := LocalFSConfig{
+		DirPath:          dir,
+		SegmentsFileSize: 1000,
+	}
+
+	wal := NewLocalFSWALBackend(&cfg)
+
+	// create 3 files in the directory using os.Create
+	for i := 50; i < 53; i++ {
+		file, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
+		assert.NoError(t, err)
+		file.Close()
+	}
+	wal.firstSegmentIndex = 50
+	wal.lastSegmentIndex = 52
+
+	size := wal.getDirectorySize()
+	// 3 files with 1000 Mb are equal to 3000 Mb. Divided by 1024 to get the size in GB is 2.9296875.
+	assert.Greater(t, size, float32(2.9))
+}
+
+func TestRotateSegmentsFileWhenDirectorySizeHasReachedTheLimit(t *testing.T) {
+	wal, dir := setupLocalFSWALBackend()
+	wal.cfg.SegmentsFileSize = 1000
+	wal.cfg.SegmentsDirSizeGB = 3
+
+	for i := 1; i < 5; i++ { // creating 4 fake files
+		file, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
+		assert.NoError(t, err)
+		file.Close()
+	}
+	wal.lastSegmentIndex = 5 // set the last segment index to 5 which is the index of the last created file above
+
+	// Since getDirectorySize returns 4.0 GB and the limit is 3.0 GB, the first segment file should be set to garbage
+	err := wal.rotateSegmentsFileIfNeeded()
+	assert.NoError(t, err)
+
+	// Verify the first segment file was set to garbage
+	_, err = os.Stat(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, wal.firstSegmentIndex)+LFSGarbageFileExtension))
+	assert.NoError(t, err)
+}
+
+func TestSetSegmentFileAsGarbage(t *testing.T) {
+	wal, dir := setupLocalFSWALBackend()
+
+	fakeFileIndex := 50
+	toBeGarbageFile, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, fakeFileIndex)))
+	assert.NoError(t, err)
+	toBeGarbageFile.Close()
+
+	err = wal.setSegmentFileAsGarbage(toBeGarbageFile.Name())
+	assert.NoError(t, err)
+
+	_, err = os.Stat(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, fakeFileIndex)+LFSGarbageFileExtension))
+	assert.NoError(t, err)
 }
