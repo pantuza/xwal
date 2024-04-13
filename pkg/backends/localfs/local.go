@@ -331,8 +331,8 @@ func (wal *LocalFSWALBackend) replaySegments(segmentsFiles []string, channel cha
 		}
 
 		// Rename the file to a garbage file that will be deleted asynchronously
-		if err := os.Rename(segmentFile, segmentFile+LFSGarbageFileExtension); err != nil {
-			return fmt.Errorf("Error renaming segment file to garbage file. Error: %s", err)
+		if err := wal.setSegmentFileAsGarbage(segmentFile); err != nil {
+			return err
 		}
 	}
 
@@ -344,6 +344,14 @@ func (wal *LocalFSWALBackend) replaySegments(segmentsFiles []string, channel cha
 	// update the first segment file to be the new current segment file so next time we replay we start from it
 	wal.firstSegmentIndex = wal.lastSegmentIndex
 
+	return nil
+}
+
+// setSegmentFileAsGarbage renames the given segment file to a garbage file that will be deleted asynchronously.
+func (wal *LocalFSWALBackend) setSegmentFileAsGarbage(segmentFile string) error {
+	if err := os.Rename(segmentFile, segmentFile+LFSGarbageFileExtension); err != nil {
+		return fmt.Errorf("Error renaming segment file to garbage file. Error: %s", err)
+	}
 	return nil
 }
 
