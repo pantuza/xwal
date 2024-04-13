@@ -222,6 +222,15 @@ func (wal *LocalFSWALBackend) rotateSegmentsFileIfNeeded() error {
 	return nil
 }
 
+// Ruffly calculates the directory size by multiplying the number of files by the segment file size.
+// It does not consider the actual size of the files. In Golang in order to get the actual size of a directory
+// we would need to walk through all files and sum their sizes. This is a very expensive operation. It would be
+// called on every Write operation. Thus, we are using this ruffly calculation.
+func (wal *LocalFSWALBackend) getDirectorySize() float32 {
+	numberOfFiles := uint32(wal.lastSegmentIndex-wal.firstSegmentIndex) + 1
+	return float32(uint32(wal.cfg.SegmentsFileSize)*numberOfFiles) / 1024 // in Gb
+}
+
 // Rotates current segments file. It closes the actual segment file and opens a new one.
 // It also increments the last segment index.
 func (wal *LocalFSWALBackend) rotateSegmentsFile() error {
