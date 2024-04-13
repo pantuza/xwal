@@ -204,8 +204,17 @@ func (wal *LocalFSWALBackend) Write(entries []*xwalpb.WALEntry) error {
 func (wal *LocalFSWALBackend) rotateSegmentsFileIfNeeded() error {
 	fileInfo, _ := wal.currentSegmentFile.Stat()
 
+	// Rotates the current segment file if it reaches the maximum size
 	if fileInfo.Size() >= int64(wal.cfg.SegmentsFileSize)*1024*1024 {
 		if err := wal.rotateSegmentsFile(); err != nil {
+			return err
+		}
+	}
+
+	// Rotates (setting it as garbage) the first segment file if the directory size reaches ruffly the maximum size
+	if wal.getDirectorySize() > float32(wal.cfg.SegmentsDirSizeGB) {
+		firstSegmentFileName := filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, wal.firstSegmentIndex))
+		if err := wal.setSegmentFileAsGarbage(firstSegmentFileName); err != nil {
 			return err
 		}
 	}
