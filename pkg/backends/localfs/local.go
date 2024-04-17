@@ -32,20 +32,6 @@ const (
 // Error message for when trying to extract an invalid segment index from a .garbage file
 var ErrInvalidSegmentIndex = errors.New("Invalid segment index. The file is a .garbage file")
 
-type LocalFSConfig struct {
-	// Name of the directory where WAL files will be stored
-	DirPath string `yaml:"dirPath"`
-
-	// Size in megabytes of each file inside the WAL
-	SegmentsFileSize int `yaml:"segmentsFileSize"`
-
-	// Size in Gigabytes of the Segments Directory
-	SegmentsDirSizeGB uint32 `yaml:"segmentsDirSizeGB"`
-
-	// Interval to clean garbage logs
-	CleanLogsInterval time.Duration `yaml:"cleanLogsInterval"`
-}
-
 type LocalFSWALBackend struct {
 	cfg *LocalFSConfig
 
