@@ -175,7 +175,7 @@ func TestReplayFromRangeOnXWAL(t *testing.T) {
 
 	cfg := NewXWALConfig("")
 	cfg.BackendConfig.LocalFS.DirPath = dir
-	cfg.BackendConfig.LocalFS.SegmentsFileSize = 1
+	cfg.BackendConfig.LocalFS.SegmentsFileSizeMB = 1
 	cfg.FlushFrequency = 10 * time.Millisecond
 	wal, err := NewXWAL(cfg)
 	assert.NoError(t, err)
@@ -223,7 +223,7 @@ func TestReplayFromRangeBackwardsOnXWAL(t *testing.T) {
 
 	cfg := NewXWALConfig("")
 	cfg.BackendConfig.LocalFS.DirPath = dir
-	cfg.BackendConfig.LocalFS.SegmentsFileSize = 1
+	cfg.BackendConfig.LocalFS.SegmentsFileSizeMB = 1
 	cfg.FlushFrequency = 10 * time.Millisecond
 	wal, err := NewXWAL(cfg)
 	assert.NoError(t, err)

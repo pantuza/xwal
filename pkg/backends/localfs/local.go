@@ -191,7 +191,7 @@ func (wal *LocalFSWALBackend) rotateSegmentsFileIfNeeded() error {
 	fileInfo, _ := wal.currentSegmentFile.Stat()
 
 	// Rotates the current segment file if it reaches the maximum size
-	if fileInfo.Size() >= int64(wal.cfg.SegmentsFileSize)*1024*1024 {
+	if fileInfo.Size() >= int64(wal.cfg.SegmentsFileSizeMB)*1024*1024 {
 		if err := wal.rotateSegmentsFile(); err != nil {
 			return err
 		}
@@ -214,7 +214,7 @@ func (wal *LocalFSWALBackend) rotateSegmentsFileIfNeeded() error {
 // called on every Write operation. Thus, we are using this ruffly calculation.
 func (wal *LocalFSWALBackend) getDirectorySize() float32 {
 	numberOfFiles := uint32(wal.lastSegmentIndex-wal.firstSegmentIndex) + 1
-	return float32(uint32(wal.cfg.SegmentsFileSize)*numberOfFiles) / 1024 // in Gb
+	return float32(uint32(wal.cfg.SegmentsFileSizeMB)*numberOfFiles) / 1024 // in Gb
 }
 
 // Rotates current segments file. It closes the actual segment file and opens a new one.

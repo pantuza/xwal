@@ -23,9 +23,9 @@ func setupLocalFSWALBackend() (*LocalFSWALBackend, string) {
 	}
 
 	cfg := LocalFSConfig{
-		DirPath:           dir,
-		SegmentsFileSize:  1,
-		SegmentsDirSizeGB: 1,
+		DirPath:            dir,
+		SegmentsFileSizeMB: 1,
+		SegmentsDirSizeGB:  1,
 	}
 
 	wal := NewLocalFSWALBackend(&cfg)
@@ -434,8 +434,8 @@ func TestGetDirectorySize(t *testing.T) {
 	}
 
 	cfg := LocalFSConfig{
-		DirPath:          dir,
-		SegmentsFileSize: 1000,
+		DirPath:            dir,
+		SegmentsFileSizeMB: 1000,
 	}
 
 	wal := NewLocalFSWALBackend(&cfg)
@@ -456,7 +456,7 @@ func TestGetDirectorySize(t *testing.T) {
 
 func TestRotateSegmentsFileWhenDirectorySizeHasReachedTheLimit(t *testing.T) {
 	wal, dir := setupLocalFSWALBackend()
-	wal.cfg.SegmentsFileSize = 1000
+	wal.cfg.SegmentsFileSizeMB = 1000
 	wal.cfg.SegmentsDirSizeGB = 3
 
 	for i := 1; i < 5; i++ { // creating 4 fake files
