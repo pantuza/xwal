@@ -95,9 +95,12 @@ setup: ./scripts/local_setup.sh ## Sets up the local machine with OS level tools
 
 
 .PHONY: build
-build: cmd/xwal/main.go ## Builds a library binary
-	$(call title, Building xWAL project..)
-	@go build -race -o bin/xwal $^ && echo $(OK) || echo $(NOK)
+build: $(EXAMPLES_DIRS) ## Builds library examples and places binaries bin directory
+
+.PHONY: $(EXAMPLES_DIRS)
+$(EXAMPLES_DIRS):
+	$(call title, Building xWAL $(notdir $@) example..)
+	@go build -race -o bin/xwal-$(notdir $@) $@/main.go && echo $(OK) || echo $(NOK)
 
 
 .PHONY: check
