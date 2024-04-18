@@ -79,7 +79,7 @@ profile: ## Generates CPU and Memory Profiles from Benchmarks
 .PHONY: clean_profile
 clean_profile: ## Cleans profiles data from profiles directory
 	$(call title, Cleaning profiling data..)
-	@rm -vf profiles/*.out
+	@rm -vf profiles/*.out && echo $(OK) || echo $(NOK)
 
 
 .PHONY: lint
@@ -117,3 +117,9 @@ run_localfs_example: ./examples/localfs/main.go _clrscr ## Runs xWAL with LocalF
 .PHONY: _clrscr
 _clrscr:
 	@clear
+
+
+.PHONY: clean
+clean: clean_profile ## Cleans up the project directory
+	$(call title, Cleaning up project directories..)
+	@rm -rf ./bin/* && echo $(OK) || echo $(NOK)
