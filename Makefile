@@ -17,6 +17,9 @@ GREEN := \033[0;32m
 BLUE := \033[0;34m
 CLRRST := \033[0m
 
+# List of directories containing examples of the library usage. Used for compiling each example code.
+EXAMPLES_DIRS := $(wildcard examples/*)
+
 # Title function is used to print a pretty message explaining what the target being executed is about
 define title
 @echo "\n$(CYAN) • $(BROWN)$(1)$(CLRRST)"
