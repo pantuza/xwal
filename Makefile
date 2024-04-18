@@ -47,7 +47,7 @@ tidy: go.mod ## Runs go mod tidy on the project
 
 
 .PHONY: run
-run: cmd/xwal/main.go ## Runs the library executable
+run: ./examples/simple/main.go ## Runs the library executable
 	$(call title, Running library binary..)
 	@go run $^
 
