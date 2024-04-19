@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: wangyoucao577/go-release-action@v1
+      - uses: goreleaser/goreleaser-action@v5
         with:
           args: release --config .goreleaser.yaml --clean
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          extra_files: LICENSE README.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
