@@ -1,0 +1,21 @@
+on:
+  push:
+    tags:
+      - "*" # triggers only if a new tag is pushed
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Release xWAL library versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: wangyoucao577/go-release-action@v1
+        with:
+          version: latest
+          args: release --clean
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_files: LICENSE README.md
