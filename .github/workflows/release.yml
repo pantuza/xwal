@@ -15,7 +15,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: wangyoucao577/go-release-action@v1
         with:
-          version: latest
           args: release --clean
           github_token: ${{ secrets.GITHUB_TOKEN }}
           extra_files: LICENSE README.md
