@@ -5,7 +5,7 @@
 
 A Cross, thread-safe and buffered Write Ahead Log (WAL) library for Golang applications.
 
-![xWAL logo](assets/xwal-logo.png)
+<img src="./assets/xwal-gopher.png" alt="xWAL Logo" width="200"/>
 
 [![XWAL CI](https://github.com/pantuza/xwal/actions/workflows/main.yml/badge.svg)](https://github.com/pantuza/xwal/actions/workflows/main.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/pantuza/xwal)](https://pkg.go.dev/github.com/pantuza/xwal)
@@ -18,6 +18,11 @@ A Cross, thread-safe and buffered Write Ahead Log (WAL) library for Golang appli
 * Cross? Yes, we mean you can choose your WAL Backend: Local Filesystem, AWS s3, etc.
 * Thread-safe? Yes, once you have a xwal instance, you can safelly call its methods concurrently.
 * Buffered? Yes, xwal uses an In Memory Buffer that flushes to the chosen WAL Backend asynchronosly.
+
+## Installation
+```bash
+go get github.com/pantuza/xwal
+```
 
 ## Usage
 
@@ -62,11 +67,6 @@ if err != nil {
 
 ## Features
 TODO: Describe all features Here
-
-## Installation
-```bash
-go get github.com/pantuza/xwal
-```
 
 ## Contributing
 TODO: Describe how to contribute
