@@ -1,4 +1,7 @@
 [![XWAL](https://github.com/pantuza/xwal/actions/workflows/main.yml/badge.svg)](https://github.com/pantuza/xwal/actions/workflows/main.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/pantuza/xwal)](https://pkg.go.dev/github.com/pantuza/xwal)
+[![Go Report Card](https://goreportcard.com/badge/github.com/pantuza/xwal)](https://goreportcard.com/report/github.com/pantuza/xwal)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Library Latest Version](https://img.shields.io/badge/Package_Latest_Version-blue)](https://github.com/pantuza/xwal/releases)
 
 
