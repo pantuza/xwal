@@ -1,12 +1,19 @@
-[![XWAL](https://github.com/pantuza/xwal/actions/workflows/main.yml/badge.svg)](https://github.com/pantuza/xwal/actions/workflows/main.yml)
+
+# xWAL
+
+<div align="center">
+
+A Cross, thread-safe and buffered Write Ahead Log (WAL) library for Golang applications.
+
+![xWAL logo](assets/xwal-logo.png)
+
+[![XWAL CI](https://github.com/pantuza/xwal/actions/workflows/main.yml/badge.svg)](https://github.com/pantuza/xwal/actions/workflows/main.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/pantuza/xwal)](https://pkg.go.dev/github.com/pantuza/xwal)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pantuza/xwal)](https://goreportcard.com/report/github.com/pantuza/xwal)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Library Latest Version](https://img.shields.io/badge/Package_Latest_Version-blue)](https://github.com/pantuza/xwal/releases)
 
-
-# xwal
-A Cross, thread-safe and buffered Write Ahead Log (WAL) library for Golang applications.
+</div>
 
 * Cross? Yes, we mean you can choose your WAL Backend: Local Filesystem, AWS s3, etc.
 * Thread-safe? Yes, once you have a xwal instance, you can safelly call its methods concurrently.
