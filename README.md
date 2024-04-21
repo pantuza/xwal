@@ -1,5 +1,5 @@
 
-# xWAL
+# :scroll: xWAL
 
 <div align="center">
 
