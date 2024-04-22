@@ -61,8 +61,8 @@ if err != nil {
 
 | Backend | Description   | Examples   |
 |-------------- | -------------- | -------------- |
-| **Local FS**    | WAL entries are stored on the local filesystem     | [localfs](./examples/)     |
-| **AWS s3**    | WAL entries are stored remotely on AWS s3 service    | [s3](./examples/)  |
+| **Local FS**    | WAL entries are stored on the local filesystem     | [localfs](./examples/localfs/)     |
+| **AWS s3**    | WAL entries are stored remotely on AWS s3 service    | [s3](./examples/s3/)  |
 
 
 ## Features
@@ -76,5 +76,4 @@ TODO: Describe how to contribute
 
 ## Knowledge Base
 * [Write Ahead Log](https://en.wikipedia.org/wiki/Write-ahead_logging)
-* [Who needs a Write Ahead Log?](https://www.cockroachlabs.com/blog/who-needs-a-write-ahead-log/)
 * [xWAL examples](./examples)
