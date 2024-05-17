@@ -188,6 +188,72 @@ func (wal *XWAL) flushToBackend() error {
 	return nil
 }
 
+// CreateCheckpoint creates a checkpoint on the WAL. Checkpoints are simply suffixes on the segments files.
+// Checkpoints will be used for Replaying the WAL from or to a given checkpoint.
+// The method returns the checkpoint segments file number so the user can store it for later replay from that particular checkpoint further.
+func (wal *XWAL) CreateCheckpoint() (uint64, error) {
+	if wal.closed {
+		return 0, fmt.Errorf("xWAL is closed. No more Checkpoints are allowed")
+	}
+
+	wal.lock.Lock()
+	defer wal.lock.Unlock()
+
+	return wal.backend.CreateCheckpoint()
+}
+
+// ReplayFromCheckpoint replays the WAL FROM a given checkpoint til the END of the WAL.
+// It can be replayed backwards: from the end of the WAL til the given checkpoint.
+// Entries read from the WAL Backend will be processed by the provided callback function.
+func (wal *XWAL) ReplayFromCheckpoint(callback ReplayCallbackFunc, checkpoint uint64, backwards bool) error {
+	if wal.closed {
+		return fmt.Errorf("xWAL is closed. No more Replays are allowed")
+	}
+
+	wal.lock.RLock()
+	defer wal.lock.RUnlock()
+
+	channel := make(chan *xwalpb.WALEntry, 1)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go wal.replayEntriesUsingUserCallback(channel, wal.cfg.BufferEntriesLength, callback, &wg)
+
+	if err := wal.backend.ReplayFromCheckpoint(channel, checkpoint, backwards); err != nil {
+		return fmt.Errorf("Error replaying entries: %v", err)
+	}
+	close(channel)
+
+	wg.Wait()
+	return nil
+}
+
+// ReplayToCheckpoint replays the WAL from the BEGINNING of the WAL til the given checkpoint.
+// It can be replayed backwards: from the given checkpoint til the beginning of the WAL.
+// Entries read from the WAL Backend will be processed by the provided callback function.
+func (wal *XWAL) ReplayToCheckpoint(callback ReplayCallbackFunc, checkpoint uint64, backwards bool) error {
+	if wal.closed {
+		return fmt.Errorf("xWAL is closed. No more Replays are allowed")
+	}
+
+	wal.lock.RLock()
+	defer wal.lock.RUnlock()
+
+	channel := make(chan *xwalpb.WALEntry, 1)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go wal.replayEntriesUsingUserCallback(channel, wal.cfg.BufferEntriesLength, callback, &wg)
+
+	if err := wal.backend.ReplayToCheckpoint(channel, checkpoint, backwards); err != nil {
+		return fmt.Errorf("Error replaying entries: %v", err)
+	}
+	close(channel)
+
+	wg.Wait()
+	return nil
+}
+
 func (wal *XWAL) Replay(callback ReplayCallbackFunc, batchSize int, backwards bool) error {
 	if wal.closed {
 		return fmt.Errorf("xWAL is closed. No more Replays are allowed")
