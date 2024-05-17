@@ -342,6 +342,28 @@ func (wal *LocalFSWALBackend) getSegmentsFilesFromRange(start, end uint32) ([]st
 	return files, nil
 }
 
+// getSegmentsFilesFromOrToCheckpoint returns the segment files from the given range considering the checkpoint.
+// Checkpoint files have a suffix that should be considered when opening the file.
+func (wal *LocalFSWALBackend) getSegmentsFilesFromOrToCheckpoint(start, end, checkpoint uint32) ([]string, error) {
+	var files []string
+	suffix := ""
+	for i := start; i <= end; i++ {
+
+		// If the current segment file is the checkpoint, we should add the checkpoint suffix to the file name otherwise we won't be able to open it.
+		if i == checkpoint {
+			suffix = LFSCheckpointFileExtension
+		}
+		files = append(files, filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, i))+suffix)
+		suffix = ""
+	}
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("No segment files found in the range from %d to %d", start, end)
+	}
+
+	return files, nil
+}
+
 // replaySegments replays the entries from the segment files to the channel.
 // It also renames the segment files to a garbage file that will be deleted asynchronously.
 //
