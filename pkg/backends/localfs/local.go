@@ -289,6 +289,46 @@ func (wal *LocalFSWALBackend) ReplayFromRange(channel chan *xwalpb.WALEntry, bac
 	return wal.replaySegments(segmentsFiles, channel, backwards)
 }
 
+// Replays WAL from the given checkpoint til the end of the WAL. It can be
+// replayed backwards: from the end of the WAL til the given checkpoint.
+// Entries read from the WAL should be sent to the given channel.
+func (wal *LocalFSWALBackend) ReplayFromCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error {
+	if checkpoint > uint64(wal.lastSegmentIndex) {
+		return fmt.Errorf("Invalid checkpoint provided. Checkpoint: %d, Last Segment file Index: %d", checkpoint, wal.lastSegmentIndex)
+	}
+
+	segmentsFiles, err := wal.getSegmentsFilesFromOrToCheckpoint(uint32(checkpoint), wal.lastSegmentIndex, uint32(checkpoint))
+	if err != nil {
+		return fmt.Errorf("Error getting segment files from range while replaying from checkpoint. Error: %s", err)
+	}
+
+	if backwards {
+		slices.Reverse(segmentsFiles)
+	}
+
+	return wal.replaySegments(segmentsFiles, channel, backwards)
+}
+
+// Replays WAL from the beginning of the WAL til the given checkpoint. It can be
+// replayed backwards: from the given checkpoint til the beginning of the WAL.
+// Entries read from the WAL should be sent to the given channel.
+func (wal *LocalFSWALBackend) ReplayToCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error {
+	if checkpoint > uint64(wal.lastSegmentIndex) {
+		return fmt.Errorf("Invalid checkpoint provided. Checkpoint: %d, Last Segment file Index: %d", checkpoint, wal.lastSegmentIndex)
+	}
+
+	segmentsFiles, err := wal.getSegmentsFilesFromOrToCheckpoint(wal.firstSegmentIndex, uint32(checkpoint), uint32(checkpoint))
+	if err != nil {
+		return fmt.Errorf("Error getting segment files from range while replaying to checkpoint. Error: %s", err)
+	}
+
+	if backwards {
+		slices.Reverse(segmentsFiles)
+	}
+
+	return wal.replaySegments(segmentsFiles, channel, backwards)
+}
+
 func (wal *LocalFSWALBackend) getSegmentsFilesFromRange(start, end uint32) ([]string, error) {
 	var files []string
 	for i := start; i <= end; i++ {
