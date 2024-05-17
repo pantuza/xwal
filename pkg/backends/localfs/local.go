@@ -27,6 +27,9 @@ const (
 
 	// Files with this extension are considered garbage and will be deleted
 	LFSGarbageFileExtension = ".garbage"
+
+	// Files with this extension are considered checkpoints
+	LFSCheckpointFileExtension = ".checkpoint"
 )
 
 // Error message for when trying to extract an invalid segment index from a .garbage file
