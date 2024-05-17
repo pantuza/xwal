@@ -233,6 +233,26 @@ func (wal *LocalFSWALBackend) rotateSegmentsFile() error {
 	return nil
 }
 
+// CreateCheckpoint creates a checkpoint on the WAL. It closes the current segment file and renames it to a checkpoint file.
+// It also opens a new current segment file. It returns an error if it could not open the new current segment file.
+// It returns the checkpoint index. The caller should store it for later replay from that particular checkpoint.
+func (wal *LocalFSWALBackend) CreateCheckpoint() (uint64, error) {
+	wal.currentSegmentFile.Close()
+	checkpointIndex := wal.lastSegmentIndex
+	wal.lastSegmentIndex++
+
+	checkpointFileName := filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, checkpointIndex)+LFSCheckpointFileExtension)
+	if err := os.Rename(wal.currentSegmentFile.Name(), checkpointFileName); err != nil {
+		return 0, fmt.Errorf("Error renaming current segment file to a checkpoint file. Error: %s", err)
+	}
+
+	if err := wal.openCurrentSegmentFile(); err != nil {
+		return 0, fmt.Errorf("Error trying to open current segment file (%d) right after creating a checkpoint. Error: %s", checkpointIndex, err)
+	}
+
+	return uint64(checkpointIndex), nil
+}
+
 // Replay replays the entries from the segment files to the channel.
 // It allows to replay the entries in a backwards order.
 // It always consider the entire WAL. Thus, from the first segment file to the last segment file or backwards.
