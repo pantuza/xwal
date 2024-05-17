@@ -489,3 +489,82 @@ func TestSetSegmentFileAsGarbage(t *testing.T) {
 	_, err = os.Stat(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, fakeFileIndex)+LFSGarbageFileExtension))
 	assert.NoError(t, err)
 }
+
+func TestCreateCheckpoint(t *testing.T) {
+	wal, dir := setupLocalFSWALBackend()
+
+	entry := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data"), CRC: 1}
+	entries := []*xwalpb.WALEntry{entry}
+
+	err := wal.Write(entries)
+	assert.NoError(t, err)
+
+	checkpointIndex, err := wal.CreateCheckpoint()
+	assert.NoError(t, err)
+
+	// Verify the checkpoint was created correctly.
+	_, err = os.Stat(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, checkpointIndex)+LFSCheckpointFileExtension))
+	assert.NoError(t, err)
+}
+
+func TestReplayFromCheckpoint(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+
+	entry1 := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data 1")}
+	entry1.CRC, _ = entry1.Checksum()
+
+	entry2 := &xwalpb.WALEntry{LSN: 2, Data: []byte("test data 2")}
+	entry2.CRC, _ = entry2.Checksum()
+
+	entries := []*xwalpb.WALEntry{entry1, entry2}
+
+	err := wal.Write(entries)
+	assert.NoError(t, err)
+
+	checkpointIndex, err := wal.CreateCheckpoint()
+	assert.NoError(t, err)
+
+	channel := make(chan *xwalpb.WALEntry, 2)
+	err = wal.ReplayFromCheckpoint(channel, checkpointIndex, false)
+	assert.NoError(t, err)
+	close(channel)
+
+	replayedEntries := make([]*xwalpb.WALEntry, 0)
+	for entry := range channel {
+		replayedEntries = append(replayedEntries, entry)
+	}
+
+	// Verify the replayed entries are correct.
+	assert.Equal(t, len(entries), len(replayedEntries), "The replayed entries length should match the written entries length.")
+}
+
+func TestReplayToCheckpoint(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+
+	entry1 := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data 1")}
+	entry1.CRC, _ = entry1.Checksum()
+
+	entry2 := &xwalpb.WALEntry{LSN: 2, Data: []byte("test data 2")}
+	entry2.CRC, _ = entry2.Checksum()
+
+	entries := []*xwalpb.WALEntry{entry1, entry2}
+
+	err := wal.Write(entries)
+	assert.NoError(t, err)
+
+	checkpointIndex, err := wal.CreateCheckpoint()
+	assert.NoError(t, err)
+
+	channel := make(chan *xwalpb.WALEntry, 2)
+	err = wal.ReplayToCheckpoint(channel, checkpointIndex, false)
+	assert.NoError(t, err)
+	close(channel)
+
+	replayedEntries := make([]*xwalpb.WALEntry, 0)
+	for entry := range channel {
+		replayedEntries = append(replayedEntries, entry)
+	}
+
+	// Verify the replayed entries are correct.
+	assert.Equal(t, len(entries), len(replayedEntries), "The replayed entries length should match the written entries length.")
+}
