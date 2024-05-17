@@ -44,6 +44,26 @@ type WALBackendInterface interface {
 	// values and start must be less than or equal to end.
 	ReplayFromRange(channel chan *xwalpb.WALEntry, backwards bool, start, end uint32) error
 
+	// Creates checkpoint on the WAL. Checkpoints are simply sufixes on the segments
+	// files names that allow users to mark their WAL files by any domain specific
+	// purpose. The method should close the current segments file and rename as the
+	// new checkpoint. Checkpoints naming strategy follows the format:
+	//     wal-00042.checkpoint
+	// Thus, the higher the WAL Segments number, the more recent is the checkpoint.
+	// The method returns the checkpoint segments file number so the user can store
+	// it for later replay from that particular checkpoint further.
+	CreateCheckpoint() (uint64, error)
+
+	// Replays WAL from the given checkpoint til the end of the WAL. It can be
+	// replayed backwards: from the end of the WAL til the given checkpoint.
+	// Entries read from the WAL should be sent to the given channel.
+	ReplayFromCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error
+
+	// Replays WAL from the beginning of the WAL til the given checkpoint. It can be
+	// replayed backwards: from the given checkpoint til the beginning of the WAL.
+	// Entries read from the WAL should be sent to the given channel.
+	ReplayToCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error
+
 	// Close performs any necessary cleanup operations to safely terminate the WAL.
 	// For example, it should close any open files and finish any pending writes.
 	// Think of it as the graceful shutdown of the WAL.
