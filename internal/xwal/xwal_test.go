@@ -255,3 +255,160 @@ func TestReplayFromRangeBackwardsOnXWAL(t *testing.T) {
 	assert.Equal(t, expectedEntries, len(entriesReaded))
 	assert.Equal(t, expectedString, string(entriesReaded[0].Data))
 }
+
+func TestCreateCheckpointOnXWAL(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	assert.NoError(t, err)
+
+	cfg := NewXWALConfig("")
+	cfg.BackendConfig.LocalFS.DirPath = dir
+	wal, err := NewXWAL(cfg)
+	assert.NoError(t, err)
+
+	checkpoint, err := wal.CreateCheckpoint()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), checkpoint)
+	// Verify the checkpoint was created correctly.
+	_, err = os.Stat(fmt.Sprintf("%s/wal_00000.checkpoint", dir))
+	assert.NoError(t, err)
+}
+
+func TestReplayXWALFromCheckpoint(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	assert.NoError(t, err)
+
+	cfg := NewXWALConfig("")
+	cfg.BackendConfig.LocalFS.DirPath = dir
+	cfg.BackendConfig.LocalFS.SegmentsFileSizeMB = 1
+	cfg.FlushFrequency = 10 * time.Millisecond
+	wal, err := NewXWAL(cfg)
+	assert.NoError(t, err)
+
+	checkpoint, err := wal.CreateCheckpoint()
+	assert.NoError(t, err)
+
+	for i := 0; i < 20; i++ { // 20 entries makes sure we have more than 5 segments files
+		randomString, err := generateRandomString(1024 * 700) // 700 Kb
+		assert.NoError(t, err)
+
+		err = wal.Write([]byte(randomString))
+		assert.NoError(t, err)
+	}
+
+	time.Sleep(100 * time.Millisecond) // wait for the periodic flush to run
+
+	entriesReaded := make([]*xwalpb.WALEntry, 0, 20)
+
+	err = wal.ReplayFromCheckpoint(func(entries []*xwalpb.WALEntry) error {
+		entriesReaded = append(entriesReaded, entries...)
+		return nil
+	}, checkpoint, false)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 20, len(entriesReaded))
+}
+
+func TestReplayXWALFromCheckpointBackwards(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	assert.NoError(t, err)
+
+	cfg := NewXWALConfig("")
+	cfg.BackendConfig.LocalFS.DirPath = dir
+	cfg.BackendConfig.LocalFS.SegmentsFileSizeMB = 1
+	cfg.FlushFrequency = 10 * time.Millisecond
+	wal, err := NewXWAL(cfg)
+	assert.NoError(t, err)
+
+	checkpoint, err := wal.CreateCheckpoint()
+	assert.NoError(t, err)
+
+	for i := 0; i < 20; i++ { // 20 entries makes sure we have more than 5 segments files
+		randomString, err := generateRandomString(1024 * 700) // 700 Kb
+		assert.NoError(t, err)
+
+		err = wal.Write([]byte(randomString))
+		assert.NoError(t, err)
+	}
+
+	time.Sleep(100 * time.Millisecond) // wait for the periodic flush to run
+
+	entriesReaded := make([]*xwalpb.WALEntry, 0, 20)
+
+	err = wal.ReplayFromCheckpoint(func(entries []*xwalpb.WALEntry) error {
+		entriesReaded = append(entriesReaded, entries...)
+		return nil
+	}, checkpoint, true)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 20, len(entriesReaded))
+}
+
+func TestReplayXWALToCheckpoint(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	assert.NoError(t, err)
+
+	cfg := NewXWALConfig("")
+	cfg.BackendConfig.LocalFS.DirPath = dir
+	cfg.BackendConfig.LocalFS.SegmentsFileSizeMB = 1
+	cfg.FlushFrequency = 10 * time.Millisecond
+	wal, err := NewXWAL(cfg)
+	assert.NoError(t, err)
+
+	for i := 0; i < 20; i++ { // 20 entries makes sure we have more than 5 segments files
+		randomString, err := generateRandomString(1024 * 700) // 700 Kb
+		assert.NoError(t, err)
+
+		err = wal.Write([]byte(randomString))
+		assert.NoError(t, err)
+	}
+
+	time.Sleep(100 * time.Millisecond) // wait for the periodic flush to run
+
+	checkpoint, err := wal.CreateCheckpoint()
+	assert.NoError(t, err)
+
+	entriesReaded := make([]*xwalpb.WALEntry, 0, 20)
+
+	err = wal.ReplayToCheckpoint(func(entries []*xwalpb.WALEntry) error {
+		entriesReaded = append(entriesReaded, entries...)
+		return nil
+	}, checkpoint, false)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 20, len(entriesReaded))
+}
+
+func TestReplayXWALToCheckpointBackwards(t *testing.T) {
+	dir, err := os.MkdirTemp("", "wal_test")
+	assert.NoError(t, err)
+
+	cfg := NewXWALConfig("")
+	cfg.BackendConfig.LocalFS.DirPath = dir
+	cfg.BackendConfig.LocalFS.SegmentsFileSizeMB = 1
+	cfg.FlushFrequency = 10 * time.Millisecond
+	wal, err := NewXWAL(cfg)
+	assert.NoError(t, err)
+
+	for i := 0; i < 20; i++ { // 20 entries makes sure we have more than 5 segments files
+		randomString, err := generateRandomString(1024 * 700) // 700 Kb
+		assert.NoError(t, err)
+
+		err = wal.Write([]byte(randomString))
+		assert.NoError(t, err)
+	}
+
+	time.Sleep(100 * time.Millisecond) // wait for the periodic flush to run
+
+	checkpoint, err := wal.CreateCheckpoint()
+	assert.NoError(t, err)
+
+	entriesReaded := make([]*xwalpb.WALEntry, 0, 20)
+
+	err = wal.ReplayToCheckpoint(func(entries []*xwalpb.WALEntry) error {
+		entriesReaded = append(entriesReaded, entries...)
+		return nil
+	}, checkpoint, true)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 20, len(entriesReaded))
+}
