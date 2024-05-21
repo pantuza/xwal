@@ -1,6 +1,10 @@
 package localfs
 
-import "time"
+import (
+	"time"
+
+	"go.uber.org/zap"
+)
 
 const (
 	DefaultDirPath            = "/tmp/xwal"
@@ -21,6 +25,9 @@ type LocalFSConfig struct {
 
 	// Interval to clean garbage logs
 	CleanLogsInterval time.Duration `yaml:"cleanLogsInterval"`
+
+	// Reference to zap logger. Does not get informed by yaml files. It is set by the xwal package
+	Logger *zap.Logger
 }
 
 // DefaultLocalFSConfig returns a default configuration for the LocalFSConfig
