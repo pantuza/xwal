@@ -37,6 +37,9 @@ type XWALConfig struct {
 
 	// Frequency that xWAL Flushes data from memory to target WAL Backend
 	FlushFrequency time.Duration `yaml:"flushFrequency"`
+
+	// Defines which log level should xWAL use (debug, info, warn, error)
+	LogLevel string `yaml:"logLevel"`
 }
 
 // Creates a new XWALConfig from yaml file or default values
