@@ -67,6 +67,7 @@ func loadDefaultConfigValues() *XWALConfig {
 		BackendConfig: WALBackendsConfigs{
 			LocalFS: localfs.DefaultLocalFSConfig(),
 		},
+		LogLevel: "error",
 	}
 }
 
