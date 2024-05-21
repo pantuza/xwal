@@ -1,7 +1,6 @@
 package xwal
 
 import (
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -50,7 +49,6 @@ backends:
 	err = tmpFile.Close()
 	assert.NoError(t, err)
 
-	fmt.Println(tmpFile.Name())
 	config := NewXWALConfig(tmpFile.Name())
 
 	// Assert values loaded from file

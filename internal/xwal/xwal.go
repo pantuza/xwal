@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/pantuza/xwal/internal/buffer"
+	"github.com/pantuza/xwal/internal/logs"
 	"github.com/pantuza/xwal/pkg/backends/localfs"
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
+	"go.uber.org/zap"
 )
 
 // The replay callback function signature
@@ -47,6 +49,9 @@ type XWAL struct {
 
 	// Backend to store the WAL entries. It implements the WALBackendInterface
 	backend types.WALBackendInterface
+
+	// Logger reference
+	logger *zap.Logger
 }
 
 func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
@@ -61,6 +66,7 @@ func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
 		cancel:        cancel,
 		FlushInterval: time.NewTicker(cfg.FlushFrequency),
 		buffer:        buffer.NewInMemoryBuffer(cfg.BufferSize, cfg.BufferEntriesLength),
+		logger:        logs.NewLogger(cfg.LogLevel),
 	}
 
 	wal.loadBackend()
