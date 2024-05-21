@@ -79,6 +79,7 @@ func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
 func (wal *XWAL) loadBackend() {
 	switch wal.cfg.WALBackend {
 	case types.LocalFileSystemWALBackend:
+		wal.cfg.BackendConfig.LocalFS.Logger = wal.logger
 		wal.backend = localfs.NewLocalFSWALBackend(wal.cfg.BackendConfig.LocalFS)
 	case types.AWSS3WALBackend:
 		wal.backend = nil
@@ -87,7 +88,7 @@ func (wal *XWAL) loadBackend() {
 	}
 
 	if err := wal.backend.Open(); err != nil {
-		fmt.Println(err.Error())
+		wal.logger.Error("Error opening WAL backend", zap.Error(err))
 	}
 }
 
@@ -97,7 +98,7 @@ func (wal *XWAL) PeriodicFlush() {
 		case <-wal.FlushInterval.C:
 			wal.lock.Lock()
 			if err := wal.flushToBackend(); err != nil {
-				fmt.Println(err) // TODO: Log error properly
+				wal.logger.Error("Error running PeriodicFlush", zap.Error(err))
 			}
 			wal.lock.Unlock()
 
@@ -187,7 +188,7 @@ func (wal *XWAL) flushToBackend() error {
 	// TODO: Asynchronously writes to the backend
 	// go func() {
 	if err := wal.backend.Write(entriesToPersist); err != nil {
-		fmt.Println(err) // TODO: Log error properly
+		wal.logger.Error("Error flushing to backend", zap.Error(err))
 	}
 	// }()
 
@@ -316,7 +317,7 @@ func (wal *XWAL) replayEntriesUsingUserCallback(channel chan *xwalpb.WALEntry, b
 
 				// If there are entries left, call the callback function
 				if err := callback(entries); err != nil {
-					fmt.Println(err)
+					wal.logger.Error("Error replaying entries using user callback", zap.Error(err))
 				}
 
 				wg.Done()
@@ -327,7 +328,7 @@ func (wal *XWAL) replayEntriesUsingUserCallback(channel chan *xwalpb.WALEntry, b
 
 			if len(entries) == batchSize {
 				if err := callback(entries); err != nil {
-					fmt.Println(err) // TODO: Log error properly
+					wal.logger.Error("Error calling user callback", zap.Error(err))
 				} else {
 					entries = make([]*xwalpb.WALEntry, 0, batchSize)
 				}
@@ -346,21 +347,25 @@ func (wal *XWAL) osSignalHandler() {
 
 	go func() {
 		sig := <-signals // Block until a signal is received
-		fmt.Println("Received signal:", sig)
+		wal.logger.Error("Received system signal", zap.String("signal", sig.String()))
 		wal.Close()
 	}()
 }
 
 func (wal *XWAL) Close() error {
 	if wal.closed {
-		fmt.Println("xWAL is already closed")
+		wal.logger.Warn("xWAL is already closed")
 		return nil
 	}
+
+	defer func() {
+		_ = wal.logger.Sync()
+	}()
 
 	wal.lock.Lock()
 	defer wal.lock.Unlock()
 
-	fmt.Println("Closing xWAL")
+	wal.logger.Info("Closing xWAL")
 
 	// We must stop the interval before anything to avoid trying to flush after closing the backend
 	wal.FlushInterval.Stop()
