@@ -15,6 +15,7 @@ import (
 
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/encoding/protodelim"
 )
 
@@ -48,6 +49,7 @@ type LocalFSWALBackend struct {
 
 	currentSegmentFile *os.File
 	lastLSN            uint64
+	logger             *zap.Logger
 }
 
 func NewLocalFSWALBackend(cfg *LocalFSConfig) *LocalFSWALBackend {
@@ -65,6 +67,7 @@ func NewLocalFSWALBackend(cfg *LocalFSConfig) *LocalFSWALBackend {
 		firstSegmentIndex: 0,
 		lastSegmentIndex:  0,
 		lastLSN:           0,
+		logger:            cfg.Logger,
 	}
 }
 
@@ -390,11 +393,11 @@ func (wal *LocalFSWALBackend) replaySegments(segmentsFiles []string, channel cha
 
 				chksum, err := entry.Checksum()
 				if err != nil {
-					fmt.Printf("Fail to validate entry checksum. Skiping replaying entry: LSN=%d, SegmentFile=%s", entry.LSN, segmentFile)
+					wal.logger.Error("Fail to validate entry checksum. Skiping replaying entry", zap.String("segmentFile", segmentFile), zap.Uint64("LSN", entry.LSN))
 				}
 
 				if entry.CRC != chksum {
-					fmt.Printf("Entry Checksum does not match! Skiping replaying entry: LSN=%d, SegmentFile=%s, EntryCRC: %d, CalculatedCRC: %d", entry.LSN, segmentFile, entry.CRC, chksum)
+					wal.logger.Warn("Entry Checksum does not match! Skiping replaying entry", zap.String("segmentFile", segmentFile), zap.Uint64("LSN", entry.LSN), zap.Uint32("EntryCRC", entry.CRC), zap.Uint32("CalculatedCRC", chksum))
 					continue
 				}
 				channel <- entry
@@ -482,13 +485,13 @@ func (wal *LocalFSWALBackend) cleanGarbageLogs() {
 		case <-wal.cleanLogsInterval.C:
 
 			if err := wal.deleteStaleFiles(); err != nil {
-				fmt.Printf("Error cleaning Garbage Logs from inside goroutine. Error: %s", err)
+				wal.logger.Error("Error cleaning Garbage Logs from inside goroutine. Error", zap.Error(err))
 			}
 
 		case <-wal.ctx.Done():
-			fmt.Println("Cleaning Garbage Logs before exiting")
+			wal.logger.Info("Cleaning Garbage Logs before exiting")
 			if err := wal.deleteStaleFiles(); err != nil {
-				fmt.Printf("Error cleaning Garbage Logs before exiting. Error: %s", err)
+				wal.logger.Error("Error cleaning Garbage Logs before exiting", zap.Error(err))
 			}
 
 			return // This ends this Goroutine
@@ -499,7 +502,7 @@ func (wal *LocalFSWALBackend) cleanGarbageLogs() {
 func (wal *LocalFSWALBackend) deleteStaleFiles() error {
 	files, err := os.ReadDir(wal.cfg.DirPath)
 	if err != nil {
-		fmt.Printf("Error reading directory entries for deletion. Error: %s", err)
+		wal.logger.Error("Error reading directory entries for deletion", zap.Error(err))
 	}
 
 	for _, file := range files {
@@ -512,7 +515,7 @@ func (wal *LocalFSWALBackend) deleteStaleFiles() error {
 }
 
 func (wal *LocalFSWALBackend) Close() error {
-	fmt.Println("Closing LocalFS WAL Backend")
+	wal.logger.Info("Closing LocalFS WAL Backend")
 
 	// closes current segment file
 	if err := wal.currentSegmentFile.Close(); err != nil {
