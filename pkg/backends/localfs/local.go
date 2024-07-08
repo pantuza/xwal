@@ -155,7 +155,9 @@ func (wal *LocalFSWALBackend) openCurrentSegmentFile() error {
 // This function extracts the segment Index.
 func (wal *LocalFSWALBackend) extractSegmentIndex(filename string) (uint32, error) {
 	var index uint32
-	fmt.Sscanf(filename, LFSWALSegmentFileFormat, &index)
+	if _, err := fmt.Sscanf(filename, LFSWALSegmentFileFormat, &index); err != nil {
+		return 0, fmt.Errorf("Error extracting segment index from file name. Error: %s", err)
+	}
 
 	// Garbage files should be skipped and not considered for the segment index
 	if filepath.Ext(filename) == LFSGarbageFileExtension {
