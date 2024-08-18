@@ -4,6 +4,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/pantuza/xwal/pkg/backends/awss3"
 	"github.com/pantuza/xwal/pkg/backends/localfs"
 	"github.com/pantuza/xwal/pkg/types"
 	yaml "gopkg.in/yaml.v3"
@@ -15,6 +16,7 @@ const (
 
 type WALBackendsConfigs struct {
 	LocalFS *localfs.LocalFSConfig `yaml:"localfs,omitempty"`
+	AWSS3   *awss3.AWSS3Config     `yaml:"awss3,omitempty"`
 }
 
 // The configuration of the xWAL. It will drive how the xWAL will use
@@ -66,6 +68,7 @@ func loadDefaultConfigValues() *XWALConfig {
 		FlushFrequency:      1 * time.Second,
 		BackendConfig: WALBackendsConfigs{
 			LocalFS: localfs.DefaultLocalFSConfig(),
+			AWSS3:   awss3.DefaultAWSS3Config(),
 		},
 		LogLevel: "error",
 	}
