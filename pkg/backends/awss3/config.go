@@ -43,12 +43,16 @@ type AWSS3Config struct {
 
 	// Reference to zap logger. Does not get informed by yaml files. It is set by the xwal package
 	Logger *zap.Logger
+
+	// Reference to the AWS Session
+	Session *session.Session
 }
 
 // DefaultAWSS3Config returns a default configuration for the AWSS3Config
 func DefaultAWSS3Config() *AWSS3Config {
 	return &AWSS3Config{
 		BucketName:         DefaultBucketName,
+		Region:             DefaultRegion,
 		Profile:            DefaultProfile,
 		SegmentsFileSizeMB: DefaultSegmentsFileSizeMB,
 		SegmentsDirSizeGB:  DefaultSegmentsDirSizeGB,
