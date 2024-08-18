@@ -3,6 +3,10 @@ package types
 import "github.com/pantuza/xwal/protobuf/xwalpb"
 
 type WALBackendInterface interface {
+	// Type returns the type of the WAL backend in a human readable format.
+	// Useful to be used in a switch case to determine the backend type.
+	Type() WALBackendType
+
 	// Open initializes the WAL for reading and writing.
 	//
 	// This method must create or open the WAL and read
@@ -83,10 +87,6 @@ type WALBackendInterface interface {
 	// This method is useful while creating new WALEntry objects and
 	// adding to the WAL.
 	IncLastIndex()
-
-	// Type returns the type of the WAL backend in a human readable format.
-	// Useful to be used in a switch case to determine the backend type.
-	Type() WALBackendType
 }
 
 // WALBackendType represents the type of the WAL backend.

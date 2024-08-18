@@ -3,6 +3,7 @@ package awss3
 import (
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/session"
 	"go.uber.org/zap"
 )
 
@@ -12,6 +13,7 @@ const (
 	DefaultSegmentsDirSizeGB  = 20
 	DefaultCleanLogsInterval  = 1 * time.Minute
 	DefaultProfile            = "default"
+	DefaultRegion             = "us-east-1"
 )
 
 type AWSS3Config struct {
