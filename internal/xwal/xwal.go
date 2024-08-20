@@ -11,6 +11,7 @@ import (
 
 	"github.com/pantuza/xwal/internal/buffer"
 	"github.com/pantuza/xwal/internal/logs"
+	"github.com/pantuza/xwal/pkg/backends/awss3"
 	"github.com/pantuza/xwal/pkg/backends/localfs"
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
@@ -82,7 +83,7 @@ func (wal *XWAL) loadBackend() {
 		wal.cfg.BackendConfig.LocalFS.Logger = wal.logger
 		wal.backend = localfs.NewLocalFSWALBackend(wal.cfg.BackendConfig.LocalFS)
 	case types.AWSS3WALBackend:
-		wal.backend = nil
+		wal.backend = awss3.NewAWSS3WALBackend(wal.cfg.BackendConfig.AWSS3)
 	default:
 		wal.backend = nil
 	}
