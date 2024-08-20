@@ -114,12 +114,24 @@ run_localfs_example: ./examples/localfs/main.go _clrscr ## Runs xWAL with LocalF
 	@go run $<
 
 
-.PHONY: _clrscr
-_clrscr:
-	@clear
+.PHONY: run_simple_example
+run_simple_example: ./examples/simple/main.go _clrscr ## Runs xWAL with LocalFS (simple) backend example
+	$(call title, Running xWAL with LocalFS (simple) backend example..)
+	@go run $<
+
+
+.PHONY: run_awss3_example
+run_awss3_example: ./examples/awss3/main.go _clrscr ## Runs xWAL with AWS s3 backend example
+	$(call title, Running xWAL with AWS s3 backend example..)
+	@go run $<
 
 
 .PHONY: clean
 clean: clean_profile ## Cleans up the project directory
 	$(call title, Cleaning up project directories..)
 	@rm -rf ./bin/* && echo $(OK) || echo $(NOK)
+
+
+.PHONY: _clrscr
+_clrscr:
+	@clear
