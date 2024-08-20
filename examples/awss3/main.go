@@ -2,18 +2,35 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/pantuza/xwal/internal/xwal"
+	"github.com/pantuza/xwal/pkg/backends/awss3"
+	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 )
 
 func main() {
 	fmt.Println("xWAL library")
 
+	// lookup AWS Access key from environment variable
+	awsAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	awsSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	if awsAccessKey == "" || awsSecretKey == "" {
+		panic("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables must be set")
+	}
+
+	s3Auth := &awss3.S3Auth{
+		AccessKey: awsAccessKey,
+		SecretKey: awsSecretKey,
+	}
+
 	cfg := xwal.NewXWALConfig("")
 	cfg.BufferSize = 1
 	cfg.BufferEntriesLength = 5
+	cfg.WALBackend = types.AWSS3WALBackend
+	cfg.BackendConfig.AWSS3.Auth = s3Auth
 
 	xwal, err := xwal.NewXWAL(cfg)
 	if err != nil {
@@ -40,5 +57,5 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	// spew.Dump(xwal)
+	// spew.Dump(cfg.BackendConfig.AWSS3)
 }
