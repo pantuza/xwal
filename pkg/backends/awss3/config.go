@@ -27,10 +27,7 @@ type AWSS3Config struct {
 	Profile string `yaml:"profile,omitempty"`
 
 	// AWS Auth credentials (optional). Default is to read from aws credentials file
-	Auth struct {
-		AccessKey string `yaml:"accessKey"`
-		SecretKey string `yaml:"secretKey"`
-	} `yaml:"auth,omitempty"`
+	Auth *S3Auth `yaml:"auth,omitempty"`
 
 	// Size in megabytes of each file inside the WAL
 	SegmentsFileSizeMB int `yaml:"segmentsFileSize"`
@@ -46,6 +43,12 @@ type AWSS3Config struct {
 
 	// Reference to the AWS Session
 	Session *session.Session
+}
+
+// S3Auth represents the AWS Auth credentials
+type S3Auth struct {
+	AccessKey string `yaml:"accessKey"`
+	SecretKey string `yaml:"secretKey"`
 }
 
 // DefaultAWSS3Config returns a default configuration for the AWSS3Config
