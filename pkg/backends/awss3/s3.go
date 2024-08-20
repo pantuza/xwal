@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pantuza/xwal/pkg/types"
+	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"go.uber.org/zap"
 )
 
@@ -49,9 +50,44 @@ func (s *AWSS3WALBackend) Type() types.WALBackendType {
 	return types.AWSS3WALBackend
 }
 
-func (s *AWSS3WALBackend) Open() error {
-	if err := awsAuthenticate(s.cfg); err != nil {
+func (wal *AWSS3WALBackend) Open() error {
+	if err := awsAuthenticate(wal.cfg); err != nil {
 		return fmt.Errorf("failed to authenticate with AWS: %w", err)
 	}
 	return nil
+}
+
+func (wal *AWSS3WALBackend) Write(entries []*xwalpb.WALEntry) error {
+	return nil
+}
+
+func (wal *AWSS3WALBackend) Replay(channel chan *xwalpb.WALEntry, backwards bool) error {
+	return nil
+}
+
+func (wal *AWSS3WALBackend) ReplayFromRange(channel chan *xwalpb.WALEntry, backwards bool, start, end uint32) error {
+	return nil
+}
+
+func (wal *AWSS3WALBackend) CreateCheckpoint() (uint64, error) {
+	return 0, nil
+}
+
+func (wal *AWSS3WALBackend) ReplayFromCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error {
+	return nil
+}
+
+func (wal *AWSS3WALBackend) ReplayToCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error {
+	return nil
+}
+
+func (wal *AWSS3WALBackend) Close() error {
+	return nil
+}
+
+func (wal *AWSS3WALBackend) LastIndex() uint64 {
+	return 0
+}
+
+func (wal *AWSS3WALBackend) IncLastIndex() {
 }
