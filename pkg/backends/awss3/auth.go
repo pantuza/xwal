@@ -1,44 +1,51 @@
 package awss3
 
 import (
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"context"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 )
 
-func awsAuthenticate(cfg *AWSS3Config) error {
-	sess, err := getAWSSession(cfg)
+func awsAuthenticate(walCfg *AWSS3Config) error {
+	awsConfig, err := getAWSConfig(walCfg)
 	if err != nil {
 		return err
 	}
 
-	cfg.Session = sess
+	walCfg.AWSConfig = awsConfig
 	return nil
 }
 
-func getAWSSession(cfg *AWSS3Config) (*session.Session, error) {
-	// If the access key and secret key are set, use them to create the session
-	if cfg.Auth.AccessKey != "" && cfg.Auth.SecretKey != "" {
-		return session.NewSession(&aws.Config{
-			Region:      aws.String(cfg.Region),
-			Credentials: credentials.NewStaticCredentials(cfg.Auth.AccessKey, cfg.Auth.SecretKey, ""),
-		})
+func getAWSConfig(walCfg *AWSS3Config) (*config.Config, error) {
+	var cfg config.Config
+	var err error
+
+	// If the access key and secret key are set, use them to create the config
+	if walCfg.Auth.AccessKey != "" && walCfg.Auth.SecretKey != "" {
+		creds := aws.Credentials{
+			AccessKeyID:     walCfg.Auth.AccessKey,
+			SecretAccessKey: walCfg.Auth.SecretKey,
+		}
+
+		if cfg, err = config.LoadDefaultConfig(context.TODO(), config.WithCredentialsProvider(credentials.StaticCredentialsProvider{Value: creds})); err != nil {
+			return nil, err
+		}
+		return &cfg, nil
 	}
 
-	// If the profile is not set, use the default session
-	if cfg.Profile == "" {
-		return session.NewSession(&aws.Config{
-			Region: aws.String(cfg.Region),
-		})
+	// If the profile is not set, use the default config
+	if walCfg.Profile == "" {
+		if cfg, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(walCfg.Region)); err != nil {
+			return nil, err
+		}
+		return &cfg, nil
 	}
 
 	// Otherwise if we have a profile set, create the session with this profile
-	sess, err := session.NewSessionWithOptions(session.Options{
-		Profile: cfg.Profile,
-		Config: aws.Config{
-			Region: aws.String(cfg.Region),
-		},
-	})
-
-	return sess, err
+	if cfg, err = config.LoadDefaultConfig(context.TODO(), config.WithSharedConfigProfile(walCfg.Profile), config.WithRegion(walCfg.Region)); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
 }
