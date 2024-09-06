@@ -25,6 +25,9 @@ type AWSS3WALBackend struct {
 	// currentSegmentFile *os.File
 	lastLSN uint64
 	logger  *zap.Logger
+
+	// AWS S3 client reference
+	// s3Client *s3.Client
 }
 
 func NewAWSS3WALBackend(cfg *AWSS3Config) *AWSS3WALBackend {
@@ -54,6 +57,8 @@ func (wal *AWSS3WALBackend) Open() error {
 	if err := awsAuthenticate(wal.cfg); err != nil {
 		return fmt.Errorf("failed to authenticate with AWS: %w", err)
 	}
+
+	// TODO: wal.s3Client = s3.New(wal.cfg.AWSConfig)
 	return nil
 }
 

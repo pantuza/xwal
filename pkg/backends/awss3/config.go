@@ -3,7 +3,7 @@ package awss3
 import (
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"go.uber.org/zap"
 )
 
@@ -42,7 +42,7 @@ type AWSS3Config struct {
 	Logger *zap.Logger
 
 	// Reference to the AWS Session
-	Session *session.Session
+	AWSConfig *config.Config
 }
 
 // S3Auth represents the AWS Auth credentials
