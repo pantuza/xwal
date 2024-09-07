@@ -12,6 +12,7 @@ func main() {
 	fmt.Println("xWAL library")
 
 	cfg := xwal.NewXWALConfig("")
+	cfg.LogLevel = "debug"
 	cfg.BufferSize = 1
 	cfg.BufferEntriesLength = 5
 

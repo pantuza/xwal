@@ -93,6 +93,7 @@ func main() {
 
 	// Initialize the write-ahead log
 	cfg := xwal.NewXWALConfig("")
+	cfg.LogLevel = "debug"
 	cfg.BackendConfig.LocalFS.SegmentsFileSizeMB = 5 // Reduce segments file size to 5 Mb so we can see Segments Files rotation in action
 	var err error
 	if wal, err = xwal.NewXWAL(cfg); err != nil {
