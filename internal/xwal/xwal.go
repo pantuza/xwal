@@ -88,6 +88,7 @@ func (wal *XWAL) loadBackend() {
 		wal.cfg.BackendConfig.LocalFS.Logger = wal.logger
 		wal.backend = localfs.NewLocalFSWALBackend(wal.cfg.BackendConfig.LocalFS)
 	case types.AWSS3WALBackend:
+		wal.cfg.BackendConfig.AWSS3.Logger = wal.logger
 		wal.backend = awss3.NewAWSS3WALBackend(wal.cfg.BackendConfig.AWSS3)
 	default:
 		wal.backend = nil
