@@ -56,6 +56,11 @@ type XWAL struct {
 }
 
 func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
+	logger, err := logs.NewLogger(cfg.LogLevel)
+	if err != nil {
+		return nil, fmt.Errorf("Error creating logger: %v", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	wal := &XWAL{
@@ -67,7 +72,7 @@ func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
 		cancel:        cancel,
 		FlushInterval: time.NewTicker(cfg.FlushFrequency),
 		buffer:        buffer.NewInMemoryBuffer(cfg.BufferSize, cfg.BufferEntriesLength),
-		logger:        logs.NewLogger(cfg.LogLevel),
+		logger:        logger,
 	}
 
 	wal.loadBackend()
