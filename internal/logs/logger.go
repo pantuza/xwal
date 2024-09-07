@@ -5,7 +5,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func NewLogger(level string) *zap.Logger {
+func NewLogger(level string) (*zap.Logger, error) {
 	encoderCfg := zap.NewProductionEncoderConfig()
 	config := zap.Config{
 		Level:             zap.NewAtomicLevelAt(getLogLevel(level)),
@@ -15,9 +15,16 @@ func NewLogger(level string) *zap.Logger {
 		Sampling:          nil,
 		Encoding:          "json",
 		EncoderConfig:     encoderCfg,
+		OutputPaths:       []string{"stdout"},
+		ErrorOutputPaths:  []string{"stderr"},
 	}
 
-	return zap.Must(config.Build())
+	logger, err := config.Build()
+	if err != nil {
+		return nil, err
+	}
+
+	return logger, nil
 }
 
 func getLogLevel(level string) zapcore.Level {
