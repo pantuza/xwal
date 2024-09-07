@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"go.uber.org/zap"
@@ -27,7 +28,7 @@ type AWSS3WALBackend struct {
 	logger  *zap.Logger
 
 	// AWS S3 client reference
-	// s3Client *s3.Client
+	s3Client *s3.Client
 }
 
 func NewAWSS3WALBackend(cfg *AWSS3Config) *AWSS3WALBackend {
@@ -58,7 +59,7 @@ func (wal *AWSS3WALBackend) Open() error {
 		return fmt.Errorf("failed to authenticate with AWS: %w", err)
 	}
 
-	// TODO: wal.s3Client = s3.New(wal.cfg.AWSConfig)
+	wal.s3Client = s3.NewFromConfig(*wal.cfg.AWSConfig)
 	return nil
 }
 

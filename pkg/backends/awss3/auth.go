@@ -18,8 +18,8 @@ func awsAuthenticate(walCfg *AWSS3Config) error {
 	return nil
 }
 
-func getAWSConfig(walCfg *AWSS3Config) (*config.Config, error) {
-	var cfg config.Config
+func getAWSConfig(walCfg *AWSS3Config) (*aws.Config, error) {
+	var cfg aws.Config
 	var err error
 
 	// If the access key and secret key are set, use them to create the config
