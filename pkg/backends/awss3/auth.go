@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"go.uber.org/zap"
 )
 
 func awsAuthenticate(walCfg *AWSS3Config) error {
@@ -14,6 +15,13 @@ func awsAuthenticate(walCfg *AWSS3Config) error {
 		return err
 	}
 
+	creds, err := awsConfig.Credentials.Retrieve(context.Background())
+	if err != nil {
+		return err
+	}
+	walCfg.Logger.Debug("AWS Config", zap.Any("region", awsConfig.Region), zap.Any("accessKeyID", creds.AccessKeyID), zap.Any("secretAccessKey", creds.SecretAccessKey))
+
+	awsConfig.BaseEndpoint = aws.String(*walCfg.AWSConfig.BaseEndpoint) // Set the base endpoint. This is useful for testing with localstac. Otherwise, it will use the default endpoint
 	walCfg.AWSConfig = awsConfig
 	return nil
 }
@@ -29,7 +37,7 @@ func getAWSConfig(walCfg *AWSS3Config) (*aws.Config, error) {
 			SecretAccessKey: walCfg.Auth.SecretKey,
 		}
 
-		if cfg, err = config.LoadDefaultConfig(context.TODO(), config.WithCredentialsProvider(credentials.StaticCredentialsProvider{Value: creds})); err != nil {
+		if cfg, err = config.LoadDefaultConfig(context.TODO(), config.WithCredentialsProvider(credentials.StaticCredentialsProvider{Value: creds}), config.WithRegion(walCfg.Region)); err != nil {
 			return nil, err
 		}
 		return &cfg, nil
