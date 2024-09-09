@@ -28,6 +28,7 @@ func main() {
 
 	cfg := xwal.NewXWALConfig("")
 	cfg.LogLevel = "debug"
+	cfg.BackendConfig.AWSS3.Region = "sa-east-1"
 	cfg.BufferSize = 1
 	cfg.BufferEntriesLength = 5
 	cfg.WALBackend = types.AWSS3WALBackend
