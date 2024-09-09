@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	awsTypes "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"go.uber.org/zap"
@@ -60,6 +61,35 @@ func (wal *AWSS3WALBackend) Open() error {
 	}
 
 	wal.s3Client = s3.NewFromConfig(*wal.cfg.AWSConfig)
+
+	// Check if the bucket exists
+	if err := wal.createWalBucket(); err != nil {
+		return fmt.Errorf("failed to open WAL bucket: %w", err)
+	}
+
+	return nil
+}
+
+// createWalBucket creates the bucket if it does not exist.
+func (wal *AWSS3WALBackend) createWalBucket() error {
+	// Create the bucket if it does not exists
+	if _, err := wal.s3Client.HeadBucket(wal.ctx, &s3.HeadBucketInput{Bucket: &wal.cfg.BucketName}); err != nil {
+
+		wal.logger.Info("Bucket does not exists. Creating it.", zap.String("bucket", wal.cfg.BucketName))
+		_, err := wal.s3Client.CreateBucket(wal.ctx, &s3.CreateBucketInput{
+			Bucket: &wal.cfg.BucketName,
+			CreateBucketConfiguration: &awsTypes.CreateBucketConfiguration{
+				LocationConstraint: awsTypes.BucketLocationConstraint(wal.cfg.Region),
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("Failed to create bucket: %w", err)
+		}
+		// Otherwise, read the bucket
+	} else {
+		wal.logger.Info("Bucket already exists", zap.String("bucket", wal.cfg.BucketName))
+	}
+
 	return nil
 }
 
