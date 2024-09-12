@@ -62,7 +62,6 @@ func (wal *AWSS3WALBackend) Open() error {
 
 	wal.s3Client = s3.NewFromConfig(*wal.cfg.AWSConfig)
 
-	// Check if the bucket exists
 	if err := wal.createWalBucket(); err != nil {
 		return fmt.Errorf("failed to open WAL bucket: %w", err)
 	}

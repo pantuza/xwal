@@ -21,7 +21,11 @@ func awsAuthenticate(walCfg *AWSS3Config) error {
 	}
 	walCfg.Logger.Debug("AWS Config", zap.Any("region", awsConfig.Region), zap.Any("accessKeyID", creds.AccessKeyID), zap.Any("secretAccessKey", creds.SecretAccessKey))
 
-	awsConfig.BaseEndpoint = aws.String(*walCfg.AWSConfig.BaseEndpoint) // Set the base endpoint. This is useful for testing with localstac. Otherwise, it will use the default endpoint
+	// Set the base endpoint in case it is present on config. This is useful for testing with localstac. Otherwise, it will use the default endpoint
+	if walCfg.AWSConfig != nil && walCfg.AWSConfig.BaseEndpoint != nil {
+		awsConfig.BaseEndpoint = aws.String(*walCfg.AWSConfig.BaseEndpoint)
+	}
+
 	walCfg.AWSConfig = awsConfig
 	return nil
 }
