@@ -11,6 +11,12 @@ import (
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/encoding/protodelim"
+)
+
+const (
+	// Segments Object name format of the WAL
+	S3WALSegmentObjectFormat = "wal_%05d"
 )
 
 type AWSS3WALBackend struct {
