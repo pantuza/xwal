@@ -104,6 +104,43 @@ func (wal *AWSS3WALBackend) createWalBucket() error {
 }
 
 func (wal *AWSS3WALBackend) Write(entries []*xwalpb.WALEntry) error {
+	// Initialize a bytes buffer to accumulate the serialized data
+	var buffer bytes.Buffer
+
+	for _, entry := range entries {
+		if _, err := protodelim.MarshalTo(&buffer, entry); err != nil {
+			return fmt.Errorf("Error marshaling entry to segment buffer before writing to s3. Error: %s", err)
+		}
+	}
+
+	if err := wal.rotateSegmentsIfNeeded(); err != nil {
+		return err
+	}
+
+	if err := wal.PutObject(wal.ctx, &buffer); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// TODO: Implement the rotation of segments
+func (wal *AWSS3WALBackend) rotateSegmentsIfNeeded() error {
+	return nil
+}
+
+// PutObject writes the data to the current segment object in the Bucket
+func (wal *AWSS3WALBackend) PutObject(ctx context.Context, data *bytes.Buffer) error {
+	input := &s3.PutObjectInput{
+		Bucket: &wal.cfg.BucketName,
+		Key:    &wal.currentSegmentObjectName,
+		Body:   bytes.NewReader(data.Bytes()),
+	}
+
+	if _, err := wal.s3Client.PutObject(ctx, input); err != nil {
+		return fmt.Errorf("Failed to put object '%s' in bucket '%s'with error: %w", wal.currentSegmentObjectName, wal.cfg.BucketName, err)
+	}
+
 	return nil
 }
 
