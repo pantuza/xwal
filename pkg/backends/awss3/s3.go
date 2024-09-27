@@ -1,6 +1,7 @@
 package awss3
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -30,9 +31,9 @@ type AWSS3WALBackend struct {
 	firstSegmentIndex uint32
 	lastSegmentIndex  uint32
 
-	// currentSegmentFile *os.File
-	lastLSN uint64
-	logger  *zap.Logger
+	currentSegmentObjectName string
+	lastLSN                  uint64
+	logger                   *zap.Logger
 
 	// AWS S3 client reference
 	s3Client *s3.Client
@@ -71,6 +72,10 @@ func (wal *AWSS3WALBackend) Open() error {
 	if err := wal.createWalBucket(); err != nil {
 		return fmt.Errorf("failed to open WAL bucket: %w", err)
 	}
+
+	// TODO: Implement the logic to read the last segment index from s3.
+	// For now simply update currentSegmentObjectName
+	wal.currentSegmentObjectName = fmt.Sprintf(S3WALSegmentObjectFormat, wal.lastSegmentIndex)
 
 	return nil
 }
