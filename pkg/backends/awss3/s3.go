@@ -141,6 +141,20 @@ func (wal *AWSS3WALBackend) rotateSegmentsIfNeeded() error {
 	return nil
 }
 
+func (wal *AWSS3WALBackend) getCurrentObjectSize(ctx context.Context) (int64, error) {
+	input := &s3.HeadObjectInput{
+		Bucket: &wal.cfg.BucketName,
+		Key:    &wal.currentSegmentObjectName,
+	}
+
+	resp, err := wal.s3Client.HeadObject(ctx, input)
+	if err != nil {
+		return 0, fmt.Errorf("Failed to get object size for object '%s' in bucket '%s' with error: %w", wal.currentSegmentObjectName, wal.cfg.BucketName, err)
+	}
+
+	return *resp.ContentLength, nil
+}
+
 // PutObject writes the data to the current segment object in the Bucket
 func (wal *AWSS3WALBackend) PutObject(ctx context.Context, data *bytes.Buffer) error {
 	input := &s3.PutObjectInput{
