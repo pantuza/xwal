@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	DefaultBucketName         = "xwal"
-	DefaultSegmentsFileSizeMB = 1000
-	DefaultSegmentsDirSizeGB  = 20
-	DefaultCleanLogsInterval  = 1 * time.Minute
-	DefaultProfile            = "default"
-	DefaultRegion             = "us-east-1"
+	DefaultBucketName           = "xwal"
+	DefaultSegmentsObjectSizeMB = 1000
+	DefaultSegmentsBucketSizeGB = 20
+	DefaultCleanLogsInterval    = 1 * time.Minute
+	DefaultProfile              = "default"
+	DefaultRegion               = "us-east-1"
 )
 
 type AWSS3Config struct {
@@ -29,11 +29,11 @@ type AWSS3Config struct {
 	// AWS Auth credentials (optional). Default is to read from aws credentials file
 	Auth *S3Auth `yaml:"auth,omitempty"`
 
-	// Size in megabytes of each file inside the WAL
-	SegmentsFileSizeMB int `yaml:"segmentsFileSize"`
+	// Size in megabytes of each object inside the s3 WAL bucket
+	SegmentsObjectSizeMB int `yaml:"segmentsObjectSizeMB"`
 
-	// Size in Gigabytes of the Segments Directory
-	SegmentsDirSizeGB uint32 `yaml:"segmentsDirSizeGB"`
+	// Size in Gigabytes of the Segments bucket inside s3
+	SegmentsBucketSizeGB uint32 `yaml:"segmentsBucketSizeGB"`
 
 	// Interval to clean garbage logs
 	CleanLogsInterval time.Duration `yaml:"cleanLogsInterval"`
@@ -54,11 +54,11 @@ type S3Auth struct {
 // DefaultAWSS3Config returns a default configuration for the AWSS3Config
 func DefaultAWSS3Config() *AWSS3Config {
 	return &AWSS3Config{
-		BucketName:         DefaultBucketName,
-		Region:             DefaultRegion,
-		Profile:            DefaultProfile,
-		SegmentsFileSizeMB: DefaultSegmentsFileSizeMB,
-		SegmentsDirSizeGB:  DefaultSegmentsDirSizeGB,
-		CleanLogsInterval:  DefaultCleanLogsInterval,
+		BucketName:           DefaultBucketName,
+		Region:               DefaultRegion,
+		Profile:              DefaultProfile,
+		SegmentsObjectSizeMB: DefaultSegmentsObjectSizeMB,
+		SegmentsBucketSizeGB: DefaultSegmentsBucketSizeGB,
+		CleanLogsInterval:    DefaultCleanLogsInterval,
 	}
 }
