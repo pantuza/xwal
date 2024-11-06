@@ -124,8 +124,20 @@ func (wal *AWSS3WALBackend) Write(entries []*xwalpb.WALEntry) error {
 	return nil
 }
 
-// TODO: Implement the rotation of segments
+// rotateSegmentsIfNeeded checks if the current segment object size is greater than the configured size
+// and rotates to the next segment if needed. It also updates the currentSegmentObjectName with the new segment name.
 func (wal *AWSS3WALBackend) rotateSegmentsIfNeeded() error {
+	// TODO: Evaluate if we can prevent calling s3 api for every call to this method
+	currentSegmentSize, err := wal.getCurrentObjectSize(wal.ctx)
+	if err != nil {
+		return err
+	}
+
+	if currentSegmentSize >= int64(wal.cfg.SegmentsObjectSizeMB)*1024*1024 {
+		wal.lastSegmentIndex++
+		wal.currentSegmentObjectName = fmt.Sprintf(S3WALSegmentObjectFormat, wal.lastSegmentIndex)
+	}
+
 	return nil
 }
 
