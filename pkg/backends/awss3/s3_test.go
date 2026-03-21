@@ -1,8 +1,11 @@
 package awss3
 
 import (
+	"bytes"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -11,6 +14,8 @@ import (
 	"github.com/orlangure/gnomock"
 	"github.com/orlangure/gnomock/preset/localstack"
 	"github.com/pantuza/xwal/internal/logs"
+	"github.com/pantuza/xwal/protobuf/xwalpb"
+	"google.golang.org/protobuf/encoding/protodelim"
 )
 
 // Reusable configuration for tests
@@ -72,4 +77,114 @@ func TestCreateWALBucketAlreadyExists(t *testing.T) {
 		err := wal.Open()
 		assert.NoError(t, err)
 	}
+}
+
+func setupS3WAL(t *testing.T) *AWSS3WALBackend {
+	t.Helper()
+
+	testCfg := cfg
+	testCfg.BucketName = fmt.Sprintf("test-bucket-%d", time.Now().UnixNano())
+	testCfg.SegmentsObjectSizeMB = 10
+	testCfg.SegmentsBucketSizeGB = 1
+
+	wal := NewAWSS3WALBackend(&testCfg)
+	assert.NoError(t, wal.Open())
+	return wal
+}
+
+func TestWriteAppendsEntriesToCurrentObject(t *testing.T) {
+	wal := setupS3WAL(t)
+
+	entry1 := &xwalpb.WALEntry{LSN: 1, Data: []byte("a")}
+	entry1.CRC, _ = entry1.Checksum()
+	entry2 := &xwalpb.WALEntry{LSN: 2, Data: []byte("b")}
+	entry2.CRC, _ = entry2.Checksum()
+
+	assert.NoError(t, wal.Write([]*xwalpb.WALEntry{entry1}))
+	assert.NoError(t, wal.Write([]*xwalpb.WALEntry{entry2}))
+
+	obj, err := wal.s3Client.GetObject(wal.ctx, &s3.GetObjectInput{
+		Bucket: &wal.cfg.BucketName,
+		Key:    aws.String(fmt.Sprintf(S3WALSegmentObjectFormat, 0)),
+	})
+	assert.NoError(t, err)
+	defer obj.Body.Close()
+
+	var entries []*xwalpb.WALEntry
+	buf := new(bytes.Buffer)
+	_, err = buf.ReadFrom(obj.Body)
+	assert.NoError(t, err)
+	reader := bytes.NewReader(buf.Bytes())
+	for reader.Len() > 0 {
+		entry := &xwalpb.WALEntry{}
+		assert.NoError(t, protodelim.UnmarshalFrom(reader, entry))
+		entries = append(entries, entry)
+	}
+
+	assert.Len(t, entries, 2)
+	assert.Equal(t, uint64(1), entries[0].LSN)
+	assert.Equal(t, uint64(2), entries[1].LSN)
+}
+
+func TestReplayReadsAndGarbageCollectsObjects(t *testing.T) {
+	wal := setupS3WAL(t)
+
+	entry1 := &xwalpb.WALEntry{LSN: 1, Data: []byte("one")}
+	entry1.CRC, _ = entry1.Checksum()
+	entry2 := &xwalpb.WALEntry{LSN: 2, Data: []byte("two")}
+	entry2.CRC, _ = entry2.Checksum()
+	assert.NoError(t, wal.Write([]*xwalpb.WALEntry{entry1, entry2}))
+
+	channel := make(chan *xwalpb.WALEntry, 2)
+	assert.NoError(t, wal.Replay(channel, false))
+	close(channel)
+
+	got := make([]*xwalpb.WALEntry, 0, 2)
+	for e := range channel {
+		got = append(got, e)
+	}
+	assert.Len(t, got, 2)
+	assert.Equal(t, []byte("one"), got[0].Data)
+	assert.Equal(t, []byte("two"), got[1].Data)
+
+	objects, err := wal.listWALObjects()
+	assert.NoError(t, err)
+	hasGarbage := false
+	for _, o := range objects {
+		if o.Key != nil && strings.HasSuffix(*o.Key, S3GarbageObjectExtension) {
+			hasGarbage = true
+			break
+		}
+	}
+	assert.True(t, hasGarbage, "expected replayed object to be marked as garbage")
+}
+
+func TestCreateCheckpointAndReplayToCheckpoint(t *testing.T) {
+	wal := setupS3WAL(t)
+
+	entry := &xwalpb.WALEntry{LSN: 1, Data: []byte("cp")}
+	entry.CRC, _ = entry.Checksum()
+	assert.NoError(t, wal.Write([]*xwalpb.WALEntry{entry}))
+
+	cp, err := wal.CreateCheckpoint()
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), cp)
+
+	channel := make(chan *xwalpb.WALEntry, 2)
+	assert.NoError(t, wal.ReplayToCheckpoint(channel, cp, false))
+	close(channel)
+
+	got := make([]*xwalpb.WALEntry, 0, 1)
+	for e := range channel {
+		got = append(got, e)
+	}
+	assert.Len(t, got, 1)
+	assert.Equal(t, []byte("cp"), got[0].Data)
+}
+
+func TestValidateConfig(t *testing.T) {
+	assert.Error(t, (&AWSS3Config{}).Validate())
+
+	c := DefaultAWSS3Config()
+	assert.NoError(t, c.Validate())
 }

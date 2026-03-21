@@ -3,14 +3,20 @@ package awss3
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"math"
+	"slices"
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	awsTypes "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
+	"github.com/aws/smithy-go"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/encoding/protodelim"
 )
@@ -18,6 +24,8 @@ import (
 const (
 	// Segments Object name format of the WAL
 	S3WALSegmentObjectFormat = "wal_%05d"
+	S3GarbageObjectExtension = ".garbage"
+	S3CheckpointObjectSuffix = ".checkpoint"
 )
 
 type AWSS3WALBackend struct {
@@ -40,6 +48,21 @@ type AWSS3WALBackend struct {
 }
 
 func NewAWSS3WALBackend(cfg *AWSS3Config) *AWSS3WALBackend {
+	if cfg.BucketName == "" {
+		cfg.BucketName = DefaultBucketName
+	}
+	if cfg.Region == "" {
+		cfg.Region = DefaultRegion
+	}
+	if cfg.SegmentsObjectSizeMB == 0 {
+		cfg.SegmentsObjectSizeMB = DefaultSegmentsObjectSizeMB
+	}
+	if cfg.SegmentsBucketSizeGB == 0 {
+		cfg.SegmentsBucketSizeGB = DefaultSegmentsBucketSizeGB
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = zap.NewNop()
+	}
 	if cfg.CleanLogsInterval == 0 {
 		cfg.CleanLogsInterval = 1 * time.Minute // Default interval to clean garbage logs
 	}
@@ -63,6 +86,9 @@ func (s *AWSS3WALBackend) Type() types.WALBackendType {
 }
 
 func (wal *AWSS3WALBackend) Open() error {
+	if err := wal.cfg.Validate(); err != nil {
+		return err
+	}
 	if err := awsAuthenticate(wal.cfg); err != nil {
 		return fmt.Errorf("failed to authenticate with AWS: %w", err)
 	}
@@ -73,9 +99,13 @@ func (wal *AWSS3WALBackend) Open() error {
 		return fmt.Errorf("failed to open WAL bucket: %w", err)
 	}
 
-	// TODO: Implement the logic to read the last segment index from s3.
-	// For now simply update currentSegmentObjectName
+	if err := wal.extractSegmentsIndexesFromObjects(); err != nil {
+		return err
+	}
 	wal.currentSegmentObjectName = fmt.Sprintf(S3WALSegmentObjectFormat, wal.lastSegmentIndex)
+	if err := wal.getLastLogSequencyNumber(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -117,7 +147,7 @@ func (wal *AWSS3WALBackend) Write(entries []*xwalpb.WALEntry) error {
 		return err
 	}
 
-	if err := wal.PutObject(wal.ctx, &buffer); err != nil {
+	if err := wal.appendObject(wal.ctx, &buffer); err != nil {
 		return err
 	}
 
@@ -147,20 +177,31 @@ func (wal *AWSS3WALBackend) getCurrentObjectSize(ctx context.Context) (int64, er
 		Key:    &wal.currentSegmentObjectName,
 	}
 
+	// TODO: Reduce the timeout for these calls. Maybe make ctx take this control.
+	// The issue is: if for some reason xWAL isn't able to communicate with s3, it should
+	// fail fast instead of hang for so long.
 	resp, err := wal.s3Client.HeadObject(ctx, input)
 	if err != nil {
+		if isS3NotFound(err) {
+			return 0, nil
+		}
 		return 0, fmt.Errorf("Failed to get object size for object '%s' in bucket '%s' with error: %w", wal.currentSegmentObjectName, wal.cfg.BucketName, err)
 	}
 
-	return *resp.ContentLength, nil
+	return aws.ToInt64(resp.ContentLength), nil
 }
 
-// PutObject writes the data to the current segment object in the Bucket
-func (wal *AWSS3WALBackend) PutObject(ctx context.Context, data *bytes.Buffer) error {
+func (wal *AWSS3WALBackend) appendObject(ctx context.Context, data *bytes.Buffer) error {
+	current, err := wal.readObject(ctx, wal.currentSegmentObjectName)
+	if err != nil {
+		return err
+	}
+	current = append(current, data.Bytes()...)
+
 	input := &s3.PutObjectInput{
 		Bucket: &wal.cfg.BucketName,
 		Key:    &wal.currentSegmentObjectName,
-		Body:   bytes.NewReader(data.Bytes()),
+		Body:   bytes.NewReader(current),
 	}
 
 	if _, err := wal.s3Client.PutObject(ctx, input); err != nil {
@@ -171,32 +212,310 @@ func (wal *AWSS3WALBackend) PutObject(ctx context.Context, data *bytes.Buffer) e
 }
 
 func (wal *AWSS3WALBackend) Replay(channel chan *xwalpb.WALEntry, backwards bool) error {
-	return nil
+	segments, err := wal.getSegmentsObjectNamesFromRange(wal.firstSegmentIndex, wal.lastSegmentIndex)
+	if err != nil {
+		return fmt.Errorf("Error getting segment objects from range. Error: %s", err)
+	}
+	if backwards {
+		slices.Reverse(segments)
+	}
+	return wal.replaySegments(segments, channel, backwards)
 }
 
 func (wal *AWSS3WALBackend) ReplayFromRange(channel chan *xwalpb.WALEntry, backwards bool, start, end uint32) error {
-	return nil
+	if start > end || start < wal.firstSegmentIndex || end > wal.lastSegmentIndex {
+		return fmt.Errorf("Invalid range provided. Start: %d, End: %d. First Segment object Index: %d, Last Segment object Index: %d", start, end, wal.firstSegmentIndex, wal.lastSegmentIndex)
+	}
+
+	segments, err := wal.getSegmentsObjectNamesFromRange(start, end)
+	if err != nil {
+		return fmt.Errorf("Error getting segment objects from range. Error: %s", err)
+	}
+	if backwards {
+		slices.Reverse(segments)
+	}
+	return wal.replaySegments(segments, channel, backwards)
 }
 
 func (wal *AWSS3WALBackend) CreateCheckpoint() (uint64, error) {
-	return 0, nil
+	checkpointIndex := wal.lastSegmentIndex
+	checkpointObjectName := fmt.Sprintf(S3WALSegmentObjectFormat, checkpointIndex) + S3CheckpointObjectSuffix
+	if err := wal.renameObject(fmt.Sprintf(S3WALSegmentObjectFormat, checkpointIndex), checkpointObjectName); err != nil {
+		return 0, fmt.Errorf("Error renaming current segment object to checkpoint object. Error: %w", err)
+	}
+
+	wal.lastSegmentIndex++
+	wal.currentSegmentObjectName = fmt.Sprintf(S3WALSegmentObjectFormat, wal.lastSegmentIndex)
+	return uint64(checkpointIndex), nil
 }
 
 func (wal *AWSS3WALBackend) ReplayFromCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error {
-	return nil
+	if checkpoint > uint64(wal.lastSegmentIndex) {
+		return fmt.Errorf("Invalid checkpoint provided. Checkpoint: %d, Last Segment object Index: %d", checkpoint, wal.lastSegmentIndex)
+	}
+	segments, err := wal.getSegmentsObjectNamesFromOrToCheckpoint(uint32(checkpoint), wal.lastSegmentIndex, uint32(checkpoint))
+	if err != nil {
+		return fmt.Errorf("Error getting segment objects from checkpoint. Error: %s", err)
+	}
+	if backwards {
+		slices.Reverse(segments)
+	}
+	return wal.replaySegments(segments, channel, backwards)
 }
 
 func (wal *AWSS3WALBackend) ReplayToCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error {
-	return nil
+	if checkpoint > uint64(wal.lastSegmentIndex) {
+		return fmt.Errorf("Invalid checkpoint provided. Checkpoint: %d, Last Segment object Index: %d", checkpoint, wal.lastSegmentIndex)
+	}
+	segments, err := wal.getSegmentsObjectNamesFromOrToCheckpoint(wal.firstSegmentIndex, uint32(checkpoint), uint32(checkpoint))
+	if err != nil {
+		return fmt.Errorf("Error getting segment objects to checkpoint. Error: %s", err)
+	}
+	if backwards {
+		slices.Reverse(segments)
+	}
+	return wal.replaySegments(segments, channel, backwards)
 }
 
 func (wal *AWSS3WALBackend) Close() error {
+	wal.cancel()
+	wal.cleanLogsInterval.Stop()
 	return nil
 }
 
 func (wal *AWSS3WALBackend) LastIndex() uint64 {
-	return 0
+	return wal.lastLSN
 }
 
 func (wal *AWSS3WALBackend) IncLastIndex() {
+	wal.lastLSN++
+}
+
+func (wal *AWSS3WALBackend) extractSegmentsIndexesFromObjects() error {
+	objects, err := wal.listWALObjects()
+	if err != nil {
+		return err
+	}
+
+	wal.firstSegmentIndex = math.MaxUint32
+	wal.lastSegmentIndex = 0
+	for _, obj := range objects {
+		if obj.Key == nil {
+			continue
+		}
+		idx, err := wal.extractSegmentIndex(*obj.Key)
+		if err == ErrInvalidSegmentIndex {
+			wal.firstSegmentIndex = idx + 1
+			continue
+		}
+		if idx < wal.firstSegmentIndex {
+			wal.firstSegmentIndex = idx
+		}
+		if idx > wal.lastSegmentIndex {
+			wal.lastSegmentIndex = idx
+		}
+	}
+	if wal.firstSegmentIndex == math.MaxUint32 {
+		wal.firstSegmentIndex = 0
+		wal.lastSegmentIndex = 0
+	}
+	return nil
+}
+
+var ErrInvalidSegmentIndex = errors.New("Invalid segment index. The object is a .garbage object")
+
+func (wal *AWSS3WALBackend) extractSegmentIndex(objectName string) (uint32, error) {
+	var index uint32
+	if _, err := fmt.Sscanf(objectName, S3WALSegmentObjectFormat, &index); err != nil {
+		return index, ErrInvalidSegmentIndex
+	}
+	if len(objectName) >= len(S3GarbageObjectExtension) && objectName[len(objectName)-len(S3GarbageObjectExtension):] == S3GarbageObjectExtension {
+		return index, ErrInvalidSegmentIndex
+	}
+	return index, nil
+}
+
+func (wal *AWSS3WALBackend) listWALObjects() ([]awsTypes.Object, error) {
+	objects := make([]awsTypes.Object, 0)
+	var token *string
+	for {
+		out, err := wal.s3Client.ListObjectsV2(wal.ctx, &s3.ListObjectsV2Input{
+			Bucket:            &wal.cfg.BucketName,
+			ContinuationToken: token,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("Error listing WAL objects from bucket %q. Error: %w", wal.cfg.BucketName, err)
+		}
+		objects = append(objects, out.Contents...)
+		if !aws.ToBool(out.IsTruncated) {
+			break
+		}
+		token = out.NextContinuationToken
+	}
+	return objects, nil
+}
+
+func (wal *AWSS3WALBackend) readObject(ctx context.Context, objectName string) ([]byte, error) {
+	out, err := wal.s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &wal.cfg.BucketName,
+		Key:    &objectName,
+	})
+	if err != nil {
+		if isS3NotFound(err) {
+			return []byte{}, nil
+		}
+		return nil, fmt.Errorf("Failed to read object '%s' from bucket '%s' with error: %w", objectName, wal.cfg.BucketName, err)
+	}
+	defer out.Body.Close()
+	data, err := io.ReadAll(out.Body)
+	if err != nil {
+		return nil, fmt.Errorf("Failed reading object body '%s' from bucket '%s' with error: %w", objectName, wal.cfg.BucketName, err)
+	}
+	return data, nil
+}
+
+func isS3NotFound(err error) bool {
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		code := apiErr.ErrorCode()
+		return code == "NotFound" || code == "NoSuchKey" || code == "404"
+	}
+	return false
+}
+
+func (wal *AWSS3WALBackend) getSegmentsObjectNamesFromRange(start, end uint32) ([]string, error) {
+	objects, err := wal.listWALObjects()
+	if err != nil {
+		return nil, err
+	}
+	indexToObject := make(map[uint32]string, len(objects))
+	for _, obj := range objects {
+		if obj.Key == nil || *obj.Key == "" {
+			continue
+		}
+		name := *obj.Key
+		if len(name) >= len(S3GarbageObjectExtension) && name[len(name)-len(S3GarbageObjectExtension):] == S3GarbageObjectExtension {
+			continue
+		}
+		var idx uint32
+		if _, err := fmt.Sscanf(name, S3WALSegmentObjectFormat, &idx); err == nil {
+			indexToObject[idx] = name
+		}
+	}
+
+	files := make([]string, 0, end-start+1)
+	for i := start; i <= end; i++ {
+		objectName, ok := indexToObject[i]
+		if !ok {
+			return nil, fmt.Errorf("No segment object found for index %d", i)
+		}
+		files = append(files, objectName)
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("No segment objects found in the range from %d to %d", start, end)
+	}
+	return files, nil
+}
+
+func (wal *AWSS3WALBackend) getSegmentsObjectNamesFromOrToCheckpoint(start, end, checkpoint uint32) ([]string, error) {
+	segments, err := wal.getSegmentsObjectNamesFromRange(start, end)
+	if err != nil {
+		return nil, err
+	}
+	expectedCheckpointName := fmt.Sprintf(S3WALSegmentObjectFormat, checkpoint) + S3CheckpointObjectSuffix
+	for i, seg := range segments {
+		var idx uint32
+		if _, err := fmt.Sscanf(seg, S3WALSegmentObjectFormat, &idx); err == nil && idx == checkpoint {
+			segments[i] = expectedCheckpointName
+		}
+	}
+	return segments, nil
+}
+
+func (wal *AWSS3WALBackend) replaySegments(segments []string, channel chan *xwalpb.WALEntry, backwards bool) error {
+	for _, segment := range segments {
+		data, err := wal.readObject(wal.ctx, segment)
+		if err != nil {
+			return fmt.Errorf("Error reading segment object '%s' for replay. Error: %s", segment, err)
+		}
+		readEntries, err := wal.readEntriesFromBytes(data)
+		if err != nil {
+			return fmt.Errorf("Error reading entries from segment object '%s' for replay. Error: %s", segment, err)
+		}
+		if backwards {
+			slices.Reverse(readEntries)
+		}
+		for _, entry := range readEntries {
+			if entry == nil {
+				continue
+			}
+			chksum, err := entry.Checksum()
+			if err != nil {
+				wal.logger.Error("Fail to validate entry checksum. Skipping replay entry", zap.String("segmentObject", segment), zap.Uint64("LSN", entry.LSN))
+			}
+			if entry.CRC != chksum {
+				wal.logger.Warn("Entry checksum does not match. Skipping replay entry", zap.String("segmentObject", segment), zap.Uint64("LSN", entry.LSN), zap.Uint32("EntryCRC", entry.CRC), zap.Uint32("CalculatedCRC", chksum))
+				continue
+			}
+			channel <- entry
+		}
+		if err := wal.setSegmentObjectAsGarbage(segment); err != nil {
+			return err
+		}
+	}
+	wal.lastSegmentIndex++
+	wal.currentSegmentObjectName = fmt.Sprintf(S3WALSegmentObjectFormat, wal.lastSegmentIndex)
+	wal.firstSegmentIndex = wal.lastSegmentIndex
+	return nil
+}
+
+func (wal *AWSS3WALBackend) readEntriesFromBytes(data []byte) ([]*xwalpb.WALEntry, error) {
+	entries := make([]*xwalpb.WALEntry, 0)
+	reader := bytes.NewReader(data)
+	for reader.Len() > 0 {
+		entry := &xwalpb.WALEntry{}
+		if err := protodelim.UnmarshalFrom(reader, entry); err != nil {
+			return nil, fmt.Errorf("Error unmarshaling entry from segment object. Error: %s", err)
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+func (wal *AWSS3WALBackend) setSegmentObjectAsGarbage(objectName string) error {
+	return wal.renameObject(objectName, objectName+S3GarbageObjectExtension)
+}
+
+func (wal *AWSS3WALBackend) renameObject(from, to string) error {
+	copySource := wal.cfg.BucketName + "/" + from
+	if _, err := wal.s3Client.CopyObject(wal.ctx, &s3.CopyObjectInput{
+		Bucket:     &wal.cfg.BucketName,
+		CopySource: &copySource,
+		Key:        &to,
+	}); err != nil {
+		return fmt.Errorf("Error copying segment object from %q to %q. Error: %w", from, to, err)
+	}
+	if _, err := wal.s3Client.DeleteObject(wal.ctx, &s3.DeleteObjectInput{
+		Bucket: &wal.cfg.BucketName,
+		Key:    &from,
+	}); err != nil {
+		return fmt.Errorf("Error deleting source segment object %q after rename. Error: %w", from, err)
+	}
+	return nil
+}
+
+func (wal *AWSS3WALBackend) getLastLogSequencyNumber() error {
+	data, err := wal.readObject(wal.ctx, wal.currentSegmentObjectName)
+	if err != nil {
+		return err
+	}
+	entries, err := wal.readEntriesFromBytes(data)
+	if err != nil {
+		return err
+	}
+	wal.lastLSN = 0
+	if len(entries) > 0 {
+		wal.lastLSN = entries[len(entries)-1].GetLSN()
+	}
+	return nil
 }

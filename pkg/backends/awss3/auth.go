@@ -2,6 +2,7 @@ package awss3
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -35,7 +36,7 @@ func getAWSConfig(walCfg *AWSS3Config) (*aws.Config, error) {
 	var err error
 
 	// If the access key and secret key are set, use them to create the config
-	if walCfg.Auth.AccessKey != "" && walCfg.Auth.SecretKey != "" {
+	if walCfg.Auth != nil && walCfg.Auth.AccessKey != "" && walCfg.Auth.SecretKey != "" {
 		creds := aws.Credentials{
 			AccessKeyID:     walCfg.Auth.AccessKey,
 			SecretAccessKey: walCfg.Auth.SecretKey,
@@ -60,4 +61,23 @@ func getAWSConfig(walCfg *AWSS3Config) (*aws.Config, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+func (cfg *AWSS3Config) Validate() error {
+	if cfg == nil {
+		return fmt.Errorf("aws s3 config is required")
+	}
+	if cfg.BucketName == "" {
+		return fmt.Errorf("bucketName is required for AWS S3 backend")
+	}
+	if cfg.Region == "" {
+		return fmt.Errorf("region is required for AWS S3 backend")
+	}
+	if cfg.SegmentsObjectSizeMB <= 0 {
+		return fmt.Errorf("segmentsObjectSizeMB must be greater than zero")
+	}
+	if cfg.SegmentsBucketSizeGB == 0 {
+		return fmt.Errorf("segmentsBucketSizeGB must be greater than zero")
+	}
+	return nil
 }
