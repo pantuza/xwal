@@ -228,8 +228,11 @@ func (wal *LocalFSWALBackend) getDirectorySize() float32 {
 // Rotates current segments file. It closes the actual segment file and opens a new one.
 // It also increments the last segment index.
 func (wal *LocalFSWALBackend) rotateSegmentsFile() error {
-	if err := wal.currentSegmentFile.Close(); err != nil {
-		return fmt.Errorf("close current segment file: %w", err)
+	if wal.currentSegmentFile != nil {
+		if err := wal.currentSegmentFile.Close(); err != nil {
+			return fmt.Errorf("close current segment file: %w", err)
+		}
+		wal.currentSegmentFile = nil
 	}
 	wal.lastSegmentIndex++
 
@@ -431,6 +434,17 @@ func (wal *LocalFSWALBackend) replaySegments(segmentsFiles []string, channel cha
 
 // setSegmentFileAsGarbage renames the given segment file to a garbage file that will be deleted asynchronously.
 func (wal *LocalFSWALBackend) setSegmentFileAsGarbage(segmentFile string) error {
+	// Windows does not allow renaming a path that is still open by this process.
+	// The active WAL segment is kept open on currentSegmentFile; close it before rename.
+	if wal.currentSegmentFile != nil {
+		currentPath := wal.currentSegmentFile.Name()
+		if filepath.Clean(segmentFile) == filepath.Clean(currentPath) {
+			if err := wal.currentSegmentFile.Close(); err != nil {
+				return fmt.Errorf("close current segment file before rename to garbage: %w", err)
+			}
+			wal.currentSegmentFile = nil
+		}
+	}
 	if err := os.Rename(segmentFile, segmentFile+LFSGarbageFileExtension); err != nil {
 		return fmt.Errorf("rename segment file to garbage file: %w", err)
 	}
