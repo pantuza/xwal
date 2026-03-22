@@ -12,7 +12,7 @@ func BenchmarkConcurrentWrites(b *testing.B) {
 	cfg := xwal.NewXWALConfig("")
 	xwal, err := xwal.NewXWAL(cfg)
 	assert.NoError(b, err)
-	defer xwal.Close()
+	defer func() { _ = xwal.Close() }()
 
 	entry := []byte(`{"name": "John", "age": 42, "city": "Belo Horizonte"}`) // any []byte fake data
 
