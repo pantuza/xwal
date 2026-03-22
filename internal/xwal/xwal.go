@@ -58,7 +58,7 @@ type XWAL struct {
 func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
 	logger, err := logs.NewLogger(cfg.LogLevel)
 	if err != nil {
-		return nil, fmt.Errorf("Error creating logger: %v", err)
+		return nil, fmt.Errorf("creating logger: %w", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -94,6 +94,11 @@ func (wal *XWAL) loadBackend() {
 		wal.backend = nil
 	}
 
+	if wal.backend == nil {
+		wal.logger.Error("Unknown or unsupported WAL backend", zap.String("walBackend", string(wal.cfg.WALBackend)))
+		return
+	}
+
 	if err := wal.backend.Open(); err != nil {
 		wal.logger.Error("Error opening WAL backend", zap.Error(err))
 	}
@@ -117,7 +122,7 @@ func (wal *XWAL) PeriodicFlush() {
 
 func (wal *XWAL) Write(data []byte) error {
 	if wal.closed {
-		return fmt.Errorf("xWAL is closed. No more writes are allowed.")
+		return fmt.Errorf("xwal is closed: no more writes are allowed")
 	}
 
 	wal.lock.Lock()
@@ -128,7 +133,7 @@ func (wal *XWAL) Write(data []byte) error {
 
 	entry, err := wal.createWALEntry(data)
 	if err != nil {
-		return fmt.Errorf("Error creating WALEntry: %v", err)
+		return fmt.Errorf("creating wal entry: %w", err)
 	}
 
 	return wal.writeOrFlush(entry)
@@ -136,7 +141,7 @@ func (wal *XWAL) Write(data []byte) error {
 
 func (wal *XWAL) createWALEntry(data []byte) (*xwalpb.WALEntry, error) {
 	if wal.backend == nil {
-		return nil, fmt.Errorf("WAL backend not initialized. You must call NewXWAL to create a new WAL instance.")
+		return nil, fmt.Errorf("wal backend not initialized: call NewXWAL to create a wal instance")
 	}
 
 	entry := &xwalpb.WALEntry{
@@ -147,7 +152,7 @@ func (wal *XWAL) createWALEntry(data []byte) (*xwalpb.WALEntry, error) {
 	var err error
 	entry.CRC, err = entry.Checksum()
 	if err != nil {
-		return nil, fmt.Errorf("Error calculating checksum while creating a new entry: %v", err)
+		return nil, fmt.Errorf("calculating checksum for new entry: %w", err)
 	}
 
 	wal.backend.IncLastIndex()
@@ -189,6 +194,9 @@ func (wal *XWAL) writeOrFlush(entry *xwalpb.WALEntry) error {
 }
 
 func (wal *XWAL) flushToBackend() error {
+	if wal.backend == nil {
+		return nil
+	}
 	// Flushes the In Memory Buffer and Writes to the WAL Backend
 	entriesToPersist := wal.buffer.Flush()
 
@@ -207,7 +215,7 @@ func (wal *XWAL) flushToBackend() error {
 // The method returns the checkpoint segments file number so the user can store it for later replay from that particular checkpoint further.
 func (wal *XWAL) CreateCheckpoint() (uint64, error) {
 	if wal.closed {
-		return 0, fmt.Errorf("xWAL is closed. No more Checkpoints are allowed")
+		return 0, fmt.Errorf("xwal is closed: no more checkpoints are allowed")
 	}
 
 	wal.lock.Lock()
@@ -221,7 +229,7 @@ func (wal *XWAL) CreateCheckpoint() (uint64, error) {
 // Entries read from the WAL Backend will be processed by the provided callback function.
 func (wal *XWAL) ReplayFromCheckpoint(callback ReplayCallbackFunc, checkpoint uint64, backwards bool) error {
 	if wal.closed {
-		return fmt.Errorf("xWAL is closed. No more Replays are allowed")
+		return fmt.Errorf("xwal is closed: no more replays are allowed")
 	}
 
 	wal.lock.RLock()
@@ -234,7 +242,7 @@ func (wal *XWAL) ReplayFromCheckpoint(callback ReplayCallbackFunc, checkpoint ui
 	go wal.replayEntriesUsingUserCallback(channel, wal.cfg.BufferEntriesLength, callback, &wg)
 
 	if err := wal.backend.ReplayFromCheckpoint(channel, checkpoint, backwards); err != nil {
-		return fmt.Errorf("Error replaying entries: %v", err)
+		return fmt.Errorf("replaying entries: %w", err)
 	}
 	close(channel)
 
@@ -247,7 +255,7 @@ func (wal *XWAL) ReplayFromCheckpoint(callback ReplayCallbackFunc, checkpoint ui
 // Entries read from the WAL Backend will be processed by the provided callback function.
 func (wal *XWAL) ReplayToCheckpoint(callback ReplayCallbackFunc, checkpoint uint64, backwards bool) error {
 	if wal.closed {
-		return fmt.Errorf("xWAL is closed. No more Replays are allowed")
+		return fmt.Errorf("xwal is closed: no more replays are allowed")
 	}
 
 	wal.lock.RLock()
@@ -260,7 +268,7 @@ func (wal *XWAL) ReplayToCheckpoint(callback ReplayCallbackFunc, checkpoint uint
 	go wal.replayEntriesUsingUserCallback(channel, wal.cfg.BufferEntriesLength, callback, &wg)
 
 	if err := wal.backend.ReplayToCheckpoint(channel, checkpoint, backwards); err != nil {
-		return fmt.Errorf("Error replaying entries: %v", err)
+		return fmt.Errorf("replaying entries: %w", err)
 	}
 	close(channel)
 
@@ -270,7 +278,7 @@ func (wal *XWAL) ReplayToCheckpoint(callback ReplayCallbackFunc, checkpoint uint
 
 func (wal *XWAL) Replay(callback ReplayCallbackFunc, batchSize int, backwards bool) error {
 	if wal.closed {
-		return fmt.Errorf("xWAL is closed. No more Replays are allowed")
+		return fmt.Errorf("xwal is closed: no more replays are allowed")
 	}
 
 	wal.lock.RLock()
@@ -283,7 +291,7 @@ func (wal *XWAL) Replay(callback ReplayCallbackFunc, batchSize int, backwards bo
 	go wal.replayEntriesUsingUserCallback(channel, batchSize, callback, &wg)
 
 	if err := wal.backend.Replay(channel, backwards); err != nil {
-		return fmt.Errorf("Error replaying entries: %v", err)
+		return fmt.Errorf("replaying entries: %w", err)
 	}
 	close(channel)
 
@@ -293,7 +301,7 @@ func (wal *XWAL) Replay(callback ReplayCallbackFunc, batchSize int, backwards bo
 
 func (wal *XWAL) ReplayFromRange(callback ReplayCallbackFunc, batchSize int, backwards bool, start, end uint32) error {
 	if wal.closed {
-		return fmt.Errorf("xWAL is closed. No more Replays are allowed")
+		return fmt.Errorf("xwal is closed: no more replays are allowed")
 	}
 
 	wal.lock.RLock()
@@ -306,7 +314,7 @@ func (wal *XWAL) ReplayFromRange(callback ReplayCallbackFunc, batchSize int, bac
 	go wal.replayEntriesUsingUserCallback(channel, batchSize, callback, &wg)
 
 	if err := wal.backend.ReplayFromRange(channel, backwards, start, end); err != nil {
-		return fmt.Errorf("Error replaying entries: %v", err)
+		return fmt.Errorf("replaying entries: %w", err)
 	}
 	close(channel)
 
@@ -355,7 +363,9 @@ func (wal *XWAL) osSignalHandler() {
 	go func() {
 		sig := <-signals // Block until a signal is received
 		wal.logger.Error("Received system signal", zap.String("signal", sig.String()))
-		wal.Close()
+		if err := wal.Close(); err != nil {
+			wal.logger.Error("closing xwal after signal", zap.Error(err))
+		}
 	}()
 }
 
