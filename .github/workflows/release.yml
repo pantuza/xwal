@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so GoReleaser changelog includes all commits since the previous tag
       - uses: goreleaser/goreleaser-action@v5
         with:
           args: release --config .goreleaser.yaml --clean
