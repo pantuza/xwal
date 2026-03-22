@@ -5,9 +5,12 @@ OK := ✅
 NOK := ❌
 SKIP := 🔕
 
-SED := $(shell which sed)
+# Directory containing this Makefile (works even if make is invoked with -f)
+MAKEFILE_DIR := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 
-GOTEST_COLORIZE := | $(SED) 's/PASS/$(OK) PASS/g' | $(SED) 's/FAIL/$(NOK) FAIL/g' | $(SED) 's/SKIP/$(SKIP) SKIP/g'
+# Stream output progressively: run the command under a PTY when possible (so e.g.
+# go test uses line-buffered output), then colorize line-by-line in one pass.
+STREAM_COLORIZE := bash $(MAKEFILE_DIR)scripts/colorize_stream.sh
 
 # ANSI Colors definitions
 CYAN := \033[0;36m
@@ -19,6 +22,9 @@ CLRRST := \033[0m
 
 # List of directories containing examples of the library usage. Used for compiling each example code.
 EXAMPLES_DIRS := $(wildcard examples/*)
+
+# go test ./... includes example packages (sample mains, no tests); skip them for cleaner output.
+TEST_PACKAGES := $(shell cd $(MAKEFILE_DIR) && go list ./... | grep -v '/examples/')
 
 # Title function is used to print a pretty message explaining what the target being executed is about
 define title
@@ -56,24 +62,23 @@ run: ./examples/simple/main.go ## Runs the library executable
 test: ## Runs the library tests
 	$(call title, Running project tests..)
 	@go clean -testcache
-	@go test ./... -race -test.v $(GOTEST_COLORIZE)
+	@$(STREAM_COLORIZE) go test $(TEST_PACKAGES) -race -test.v
 
 
 .PHONY: bench
 bench: ## Runs the library benchmarks
 	$(call title, Running project benchmarks..)
 	@go clean -testcache
-	@go test ./benchmark/ -race -bench . -count 5 $(GOTEST_COLORIZE)
+	@$(STREAM_COLORIZE) go test ./benchmark/ -race -bench . -count 5
 
 
 .PHONY: profile
 profile: ## Generates CPU and Memory Profiles from Benchmarks
 	$(call title, Running project benchmarks..)
 	@go clean -testcache
-	@go test ./benchmark/ -race -bench . -count 5 \
+	@$(STREAM_COLORIZE) go test ./benchmark/ -race -bench . -count 5 \
 		-benchmem -memprofile profiles/mem-profile.out \
-		-cpuprofile profiles/cpu-profile.out \
-		$(GOTEST_COLORIZE)
+		-cpuprofile profiles/cpu-profile.out
 
 
 .PHONY: clean_profile
@@ -85,7 +90,7 @@ clean_profile: ## Cleans profiles data from profiles directory
 .PHONY: lint
 lint: ## Runs the Golang Linter
 	$(call title, Linting source code..)
-	@golangci-lint run && echo $(OK) || echo $(NOK)
+	@$(STREAM_COLORIZE) golangci-lint run && echo $(OK) || echo $(NOK)
 
 
 .PHONY: setup
