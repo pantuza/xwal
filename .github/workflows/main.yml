@@ -53,6 +53,7 @@ jobs:
         with:
           go-version: "1.26"
           cache: false
+      # v7+ required when version is golangci-lint v2.x (v6 only supports v1 installers).
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:

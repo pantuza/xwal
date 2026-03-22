@@ -79,7 +79,7 @@ if err != nil {
 
 ## Contributing
 
-Fork the repository, create a branch, and open a pull request. Run `make check` before pushing so lint, tests, benchmarks, and examples all pass. Install **golangci-lint v2** with the same toolchain as the module (`GOTOOLCHAIN=go1.26.0 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4`) or run `make setup`. The Makefile prefers `$(go env GOPATH)/bin/golangci-lint` over an older system copy. Keep changes focused and update the changelog when the behavior or public API changes.
+Fork the repository, create a branch, and open a pull request. Run `make check` before pushing so lint, tests, benchmarks, and examples all pass. After changing Go or CI tooling, let GitHub Actions finish on your branch before tagging a release. Install **golangci-lint v2** with the same toolchain as the module (`GOTOOLCHAIN=go1.26.0 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4`) or run `make setup`. The Makefile prefers `$(go env GOPATH)/bin/golangci-lint` over an older system copy. Keep changes focused and update the changelog when the behavior or public API changes.
 
 ## License
 * [MIT License](./LICENSE)
