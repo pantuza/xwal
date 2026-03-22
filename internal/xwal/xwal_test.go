@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"github.com/stretchr/testify/assert"
 )
@@ -63,6 +64,19 @@ func TestPeriodicFlush(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 3, len(entriesReaded))
 	})
+}
+
+func TestWriteWithUnknownWALBackend(t *testing.T) {
+	cfg := NewXWALConfig("")
+	cfg.WALBackend = types.WALBackendType("unknown_backend")
+
+	wal, err := NewXWAL(cfg)
+	assert.NoError(t, err)
+	assert.Nil(t, wal.backend, "unknown backend type should leave backend unset")
+
+	err = wal.Write([]byte("data"))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "wal backend not initialized")
 }
 
 func TestWriteWhenTheWalIsAlreadyClosed(t *testing.T) {
