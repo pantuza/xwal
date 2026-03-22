@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-22
+
+### Changed
+
+- **Go:** Require Go 1.26 (module and CI updated from 1.22).
+- **Lint:** CI and `make setup` use golangci-lint **v2.11.4**, built with Go 1.26 so analysis matches the module version; the Makefile prefers `$(go env GOPATH)/bin/golangci-lint` when present.
+
+[0.3.0]: https://github.com/pantuza/xwal/releases/tag/v0.3.0
+
 ## [0.2.2] - 2026-03-22
 
 ### Fixed

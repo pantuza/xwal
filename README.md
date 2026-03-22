@@ -19,6 +19,10 @@ A Cross, thread-safe and buffered Write Ahead Log (WAL) library for Golang appli
 * Thread-safe? Yes, once you have a xwal instance, you can safelly call its methods concurrently.
 * Buffered? Yes, xwal uses an In Memory Buffer that flushes to the chosen WAL Backend asynchronosly.
 
+## Requirements
+
+- Go **1.26** or newer (see `go.mod`).
+
 ## Installation
 ```bash
 go get github.com/pantuza/xwal
@@ -62,14 +66,20 @@ if err != nil {
 | Backend | Description   | Examples   |
 |-------------- | -------------- | -------------- |
 | **Local FS**    | WAL entries are stored on the local filesystem     | [localfs](./examples/localfs/)     |
-| **AWS s3**    | WAL entries are stored remotely on AWS s3 service    | [s3](./examples/s3/)  |
+| **AWS s3**    | WAL entries are stored remotely on AWS s3 service    | [awss3](./examples/awss3/)  |
 
 
 ## Features
-TODO: Describe all features Here
+
+- Pluggable backends (local disk, Amazon S3) with a shared API.
+- In-memory buffering with asynchronous flush to the backend.
+- Safe concurrent use of a single `XWAL` instance from multiple goroutines.
+- Replay with ordered delivery to a callback for recovery or reprocessing.
+- Configurable segment sizing, buffer limits, logging (zap), and backend-specific options.
 
 ## Contributing
-TODO: Describe how to contribute
+
+Fork the repository, create a branch, and open a pull request. Run `make check` before pushing so lint, tests, benchmarks, and examples all pass. Install **golangci-lint v2** with the same toolchain as the module (`GOTOOLCHAIN=go1.26.0 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4`) or run `make setup`. The Makefile prefers `$(go env GOPATH)/bin/golangci-lint` over an older system copy. Keep changes focused and update the changelog when the behavior or public API changes.
 
 ## License
 * [MIT License](./LICENSE)

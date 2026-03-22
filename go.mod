@@ -1,8 +1,8 @@
 module github.com/pantuza/xwal
 
-go 1.22
+go 1.26
 
-toolchain go1.22.0
+toolchain go1.26.0
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.30.5

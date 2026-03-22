@@ -8,6 +8,10 @@ SKIP := 🔕
 # Directory containing this Makefile (works even if make is invoked with -f)
 MAKEFILE_DIR := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 
+# Prefer golangci-lint from `go install` (see scripts/local_setup.sh) over an older Homebrew build.
+GOPATH_BIN := $(shell cd $(MAKEFILE_DIR) && go env GOPATH)/bin
+GOLANGCI_LINT := $(shell if [ -x "$(GOPATH_BIN)/golangci-lint" ]; then echo "$(GOPATH_BIN)/golangci-lint"; else command -v golangci-lint 2>/dev/null || echo golangci-lint; fi)
+
 # Stream output progressively: run the command under a PTY when possible (so e.g.
 # go test uses line-buffered output), then colorize line-by-line in one pass.
 STREAM_COLORIZE := bash $(MAKEFILE_DIR)scripts/colorize_stream.sh
@@ -90,7 +94,7 @@ clean_profile: ## Cleans profiles data from profiles directory
 .PHONY: lint
 lint: ## Runs the Golang Linter
 	$(call title, Linting source code..)
-	@$(STREAM_COLORIZE) golangci-lint run && echo $(OK) || echo $(NOK)
+	@$(STREAM_COLORIZE) $(GOLANGCI_LINT) run && echo $(OK) || echo $(NOK)
 
 
 .PHONY: setup
@@ -139,4 +143,4 @@ clean: clean_profile ## Cleans up the project directory
 
 .PHONY: _clrscr
 _clrscr:
-	@clear
+	@clear 2>/dev/null || true
