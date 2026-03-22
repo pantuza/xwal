@@ -42,7 +42,7 @@ backends:
 `)
 	tmpFile, err := os.CreateTemp("", "test_xwal_config.yaml")
 	assert.NoError(t, err)
-	defer os.Remove(tmpFile.Name()) // Clean up
+	defer func() { _ = os.Remove(tmpFile.Name()) }() // Clean up
 
 	_, err = tmpFile.Write(content)
 	assert.NoError(t, err)
