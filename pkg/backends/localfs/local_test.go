@@ -154,16 +154,16 @@ func TestReplayFromRange(t *testing.T) {
 	// make two copies of the segiment file to test the replay from range
 	inputSegmentFile, err := os.OpenFile(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 0)), os.O_RDONLY, 0644)
 	assert.NoError(t, err)
-	defer inputSegmentFile.Close()
+	defer func() { _ = inputSegmentFile.Close() }()
 	inputContent, err := io.ReadAll(inputSegmentFile)
 	assert.NoError(t, err)
 
 	segmentFileCopy1, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 1)))
 	assert.NoError(t, err)
-	defer segmentFileCopy1.Close()
+	defer func() { _ = segmentFileCopy1.Close() }()
 	segmentFileCopy2, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 2)))
 	assert.NoError(t, err)
-	defer segmentFileCopy2.Close()
+	defer func() { _ = segmentFileCopy2.Close() }()
 
 	_, err = segmentFileCopy1.Write(inputContent)
 	assert.NoError(t, err)
@@ -206,16 +206,16 @@ func TestReplayFromRangeBackwards(t *testing.T) {
 	// make two copies of the segiment file to test the replay from range
 	inputSegmentFile, err := os.OpenFile(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 0)), os.O_RDONLY, 0644)
 	assert.NoError(t, err)
-	defer inputSegmentFile.Close()
+	defer func() { _ = inputSegmentFile.Close() }()
 	inputContent, err := io.ReadAll(inputSegmentFile)
 	assert.NoError(t, err)
 
 	segmentFileCopy1, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 1)))
 	assert.NoError(t, err)
-	defer segmentFileCopy1.Close()
+	defer func() { _ = segmentFileCopy1.Close() }()
 	segmentFileCopy2, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 2)))
 	assert.NoError(t, err)
-	defer segmentFileCopy2.Close()
+	defer func() { _ = segmentFileCopy2.Close() }()
 
 	_, err = segmentFileCopy1.Write(inputContent)
 	assert.NoError(t, err)
@@ -384,7 +384,7 @@ func TestFirstSegmentIndexIsThefirstFileInTheSequence(t *testing.T) {
 	for i := 50; i < 53; i++ {
 		file, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
 		assert.NoError(t, err)
-		file.Close()
+		assert.NoError(t, file.Close())
 	}
 
 	err = wal.extractSegmentsIndexesFromFiles()
@@ -410,14 +410,14 @@ func TestFirstSegmentIndexSkipsGarbageFiles(t *testing.T) {
 	for i := 48; i < 50; i++ {
 		file, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, i)+LFSGarbageFileExtension))
 		assert.NoError(t, err)
-		file.Close()
+		assert.NoError(t, file.Close())
 	}
 
 	// create 3 files in the directory using os.Create
 	for i := 50; i < 53; i++ {
 		file, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
 		assert.NoError(t, err)
-		file.Close()
+		assert.NoError(t, file.Close())
 	}
 
 	err = wal.extractSegmentsIndexesFromFiles()
@@ -444,7 +444,7 @@ func TestGetDirectorySize(t *testing.T) {
 	for i := 50; i < 53; i++ {
 		file, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
 		assert.NoError(t, err)
-		file.Close()
+		assert.NoError(t, file.Close())
 	}
 	wal.firstSegmentIndex = 50
 	wal.lastSegmentIndex = 52
@@ -462,7 +462,7 @@ func TestRotateSegmentsFileWhenDirectorySizeHasReachedTheLimit(t *testing.T) {
 	for i := 1; i < 5; i++ { // creating 4 fake files
 		file, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
 		assert.NoError(t, err)
-		file.Close()
+		assert.NoError(t, file.Close())
 	}
 	wal.lastSegmentIndex = 5 // set the last segment index to 5 which is the index of the last created file above
 
@@ -481,7 +481,7 @@ func TestSetSegmentFileAsGarbage(t *testing.T) {
 	fakeFileIndex := 50
 	toBeGarbageFile, err := os.Create(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, fakeFileIndex)))
 	assert.NoError(t, err)
-	toBeGarbageFile.Close()
+	assert.NoError(t, toBeGarbageFile.Close())
 
 	err = wal.setSegmentFileAsGarbage(toBeGarbageFile.Name())
 	assert.NoError(t, err)
