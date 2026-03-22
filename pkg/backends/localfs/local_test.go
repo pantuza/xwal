@@ -154,21 +154,21 @@ func TestReplayFromRange(t *testing.T) {
 	// make two copies of the segiment file to test the replay from range
 	inputSegmentFile, err := os.OpenFile(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 0)), os.O_RDONLY, 0644)
 	assert.NoError(t, err)
-	defer func() { _ = inputSegmentFile.Close() }()
 	inputContent, err := io.ReadAll(inputSegmentFile)
 	assert.NoError(t, err)
+	assert.NoError(t, inputSegmentFile.Close())
 
 	segmentFileCopy1, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 1)))
 	assert.NoError(t, err)
-	defer func() { _ = segmentFileCopy1.Close() }()
 	segmentFileCopy2, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 2)))
 	assert.NoError(t, err)
-	defer func() { _ = segmentFileCopy2.Close() }()
 
 	_, err = segmentFileCopy1.Write(inputContent)
 	assert.NoError(t, err)
 	_, err = segmentFileCopy2.Write(inputContent)
 	assert.NoError(t, err)
+	assert.NoError(t, segmentFileCopy1.Close())
+	assert.NoError(t, segmentFileCopy2.Close())
 
 	wal.lastSegmentIndex = 2 // set the last segment index to 2 to test the replay from range
 
@@ -206,21 +206,21 @@ func TestReplayFromRangeBackwards(t *testing.T) {
 	// make two copies of the segiment file to test the replay from range
 	inputSegmentFile, err := os.OpenFile(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 0)), os.O_RDONLY, 0644)
 	assert.NoError(t, err)
-	defer func() { _ = inputSegmentFile.Close() }()
 	inputContent, err := io.ReadAll(inputSegmentFile)
 	assert.NoError(t, err)
+	assert.NoError(t, inputSegmentFile.Close())
 
 	segmentFileCopy1, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 1)))
 	assert.NoError(t, err)
-	defer func() { _ = segmentFileCopy1.Close() }()
 	segmentFileCopy2, err := os.Create(filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, 2)))
 	assert.NoError(t, err)
-	defer func() { _ = segmentFileCopy2.Close() }()
 
 	_, err = segmentFileCopy1.Write(inputContent)
 	assert.NoError(t, err)
 	_, err = segmentFileCopy2.Write(inputContent)
 	assert.NoError(t, err)
+	assert.NoError(t, segmentFileCopy1.Close())
+	assert.NoError(t, segmentFileCopy2.Close())
 
 	wal.lastSegmentIndex = 2 // set the last segment index to 2 to test the replay from range
 
@@ -325,6 +325,7 @@ func TestCleanLogs(t *testing.T) {
 	// to be cleaned by calling directly the cleanGarbageLogs method
 	garbageFile, err := os.Create(filepath.Join(wal.cfg.DirPath, "garbage.garbage"))
 	assert.NoError(t, err)
+	assert.NoError(t, garbageFile.Close())
 
 	err = wal.deleteStaleFiles()
 	assert.NoError(t, err)
@@ -358,6 +359,9 @@ func TestExtractSegmentIndexShouldReturnError(t *testing.T) {
 
 	err := wal.Write(entries)
 	assert.NoError(t, err)
+
+	assert.NoError(t, wal.currentSegmentFile.Close())
+	wal.currentSegmentFile = nil
 
 	segmentFile := filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, 0))
 	newSegmentFile := segmentFile + LFSGarbageFileExtension
