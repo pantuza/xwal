@@ -1,6 +1,7 @@
 package main
 
 import (
+	crand "crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"math/rand"
@@ -25,7 +26,7 @@ func handlerWithDelay(w http.ResponseWriter, r *http.Request) {
 	delay := time.Duration(rand.Intn(1000)) * time.Millisecond
 
 	time.Sleep(delay) // Simulate work by sleeping
-	fmt.Fprintf(w, "Finished work with %v delay\n", delay)
+	_, _ = fmt.Fprintf(w, "Finished work with %v delay\n", delay)
 }
 
 // startServer initializes and starts the HTTP server
@@ -55,7 +56,7 @@ func startClient(clientID int, rng *rand.Rand) {
 			fmt.Printf("Client %d Error: %v\n", clientID, err)
 			continue
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		longString, _ := generateRandomString(1024 * 50) // 50 Kb
 		msg := fmt.Sprintf(`{"client": "%d", "route": "%s", "long_string": "%s"}`, clientID, url, longString)
@@ -73,7 +74,7 @@ func startClient(clientID int, rng *rand.Rand) {
 // helper function to simply simulate a long string
 func generateRandomString(n int) (string, error) {
 	b := make([]byte, n)
-	_, err := rand.Read(b)
+	_, err := crand.Read(b)
 	if err != nil {
 		return "", err
 	}
@@ -99,7 +100,7 @@ func main() {
 	if wal, err = xwal.NewXWAL(cfg); err != nil {
 		panic(err)
 	}
-	defer wal.Close()
+	defer func() { _ = wal.Close() }()
 
 	startServer()
 	time.Sleep(1 * time.Second) // Give the server a moment to start
