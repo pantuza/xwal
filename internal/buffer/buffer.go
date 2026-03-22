@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	ErrorShouldFlushBuffer = "Buffer should be flushed before writing"
+	ErrorShouldFlushBuffer = "buffer should be flushed before writing"
 )
 
 type InMemoryBuffer struct {
