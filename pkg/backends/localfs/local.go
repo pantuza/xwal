@@ -196,6 +196,9 @@ func (wal *LocalFSWALBackend) Write(entries []*xwalpb.WALEntry) error {
 // rotateSegmentsFileIfNeeded checks if the current segment file reached the maximum size.
 // If so, call the rotate method
 func (wal *LocalFSWALBackend) rotateSegmentsFileIfNeeded() error {
+	if wal.currentSegmentFile == nil {
+		return fmt.Errorf("no current segment file for rotate check")
+	}
 	fileInfo, _ := wal.currentSegmentFile.Stat()
 
 	// Rotates the current segment file if it reaches the maximum size
@@ -500,6 +503,7 @@ func (wal *LocalFSWALBackend) getLastLogSequencyNumber() error {
 	if err != nil {
 		return fmt.Errorf("open current segment file for getting the last log sequency number: %w", err)
 	}
+	defer func() { _ = file.Close() }()
 
 	entries, err := wal.readEntriesFromFile(file)
 	if err != nil {
