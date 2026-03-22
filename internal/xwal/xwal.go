@@ -242,6 +242,7 @@ func (wal *XWAL) ReplayFromCheckpoint(callback ReplayCallbackFunc, checkpoint ui
 	go wal.replayEntriesUsingUserCallback(channel, wal.cfg.BufferEntriesLength, callback, &wg)
 
 	if err := wal.backend.ReplayFromCheckpoint(channel, checkpoint, backwards); err != nil {
+		wal.abortReplayConsumer(channel, &wg)
 		return fmt.Errorf("replaying entries: %w", err)
 	}
 	close(channel)
@@ -268,6 +269,7 @@ func (wal *XWAL) ReplayToCheckpoint(callback ReplayCallbackFunc, checkpoint uint
 	go wal.replayEntriesUsingUserCallback(channel, wal.cfg.BufferEntriesLength, callback, &wg)
 
 	if err := wal.backend.ReplayToCheckpoint(channel, checkpoint, backwards); err != nil {
+		wal.abortReplayConsumer(channel, &wg)
 		return fmt.Errorf("replaying entries: %w", err)
 	}
 	close(channel)
@@ -291,6 +293,7 @@ func (wal *XWAL) Replay(callback ReplayCallbackFunc, batchSize int, backwards bo
 	go wal.replayEntriesUsingUserCallback(channel, batchSize, callback, &wg)
 
 	if err := wal.backend.Replay(channel, backwards); err != nil {
+		wal.abortReplayConsumer(channel, &wg)
 		return fmt.Errorf("replaying entries: %w", err)
 	}
 	close(channel)
@@ -314,12 +317,19 @@ func (wal *XWAL) ReplayFromRange(callback ReplayCallbackFunc, batchSize int, bac
 	go wal.replayEntriesUsingUserCallback(channel, batchSize, callback, &wg)
 
 	if err := wal.backend.ReplayFromRange(channel, backwards, start, end); err != nil {
+		wal.abortReplayConsumer(channel, &wg)
 		return fmt.Errorf("replaying entries: %w", err)
 	}
 	close(channel)
 
 	wg.Wait()
 	return nil
+}
+
+// abortReplayConsumer closes the replay channel and waits for the callback goroutine after a backend error.
+func (wal *XWAL) abortReplayConsumer(channel chan *xwalpb.WALEntry, wg *sync.WaitGroup) {
+	close(channel)
+	wg.Wait()
 }
 
 // Async function to read batchSize entries from a channel and call the callback function

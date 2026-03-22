@@ -432,18 +432,33 @@ func (wal *LocalFSWALBackend) replaySegments(segmentsFiles []string, channel cha
 	return nil
 }
 
+// currentSegmentMatchesPath reports whether segmentFile is the file currently open for writes.
+// On Windows, cfg.DirPath and (*os.File).Name() may differ (e.g. 8.3 short path vs long path).
+func (wal *LocalFSWALBackend) currentSegmentMatchesPath(segmentFile string) bool {
+	if wal.currentSegmentFile == nil {
+		return false
+	}
+	curPath := wal.currentSegmentFile.Name()
+	if filepath.Clean(segmentFile) == filepath.Clean(curPath) {
+		return true
+	}
+	fi1, err1 := os.Stat(segmentFile)
+	fi2, err2 := os.Stat(curPath)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return os.SameFile(fi1, fi2)
+}
+
 // setSegmentFileAsGarbage renames the given segment file to a garbage file that will be deleted asynchronously.
 func (wal *LocalFSWALBackend) setSegmentFileAsGarbage(segmentFile string) error {
 	// Windows does not allow renaming a path that is still open by this process.
 	// The active WAL segment is kept open on currentSegmentFile; close it before rename.
-	if wal.currentSegmentFile != nil {
-		currentPath := wal.currentSegmentFile.Name()
-		if filepath.Clean(segmentFile) == filepath.Clean(currentPath) {
-			if err := wal.currentSegmentFile.Close(); err != nil {
-				return fmt.Errorf("close current segment file before rename to garbage: %w", err)
-			}
-			wal.currentSegmentFile = nil
+	if wal.currentSegmentMatchesPath(segmentFile) {
+		if err := wal.currentSegmentFile.Close(); err != nil {
+			return fmt.Errorf("close current segment file before rename to garbage: %w", err)
 		}
+		wal.currentSegmentFile = nil
 	}
 	if err := os.Rename(segmentFile, segmentFile+LFSGarbageFileExtension); err != nil {
 		return fmt.Errorf("rename segment file to garbage file: %w", err)
