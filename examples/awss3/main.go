@@ -38,7 +38,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer xwal.Close()
+	defer func() { _ = xwal.Close() }()
 
 	for i := 0; i < 12; i++ {
 
