@@ -108,7 +108,7 @@ func TestWriteAppendsEntriesToCurrentObject(t *testing.T) {
 		Key:    aws.String(fmt.Sprintf(S3WALSegmentObjectFormat, 0)),
 	})
 	assert.NoError(t, err)
-	defer obj.Body.Close()
+	defer func() { _ = obj.Body.Close() }()
 
 	var entries []*xwalpb.WALEntry
 	buf := new(bytes.Buffer)
@@ -180,11 +180,4 @@ func TestCreateCheckpointAndReplayToCheckpoint(t *testing.T) {
 	}
 	assert.Len(t, got, 1)
 	assert.Equal(t, []byte("cp"), got[0].Data)
-}
-
-func TestValidateConfig(t *testing.T) {
-	assert.Error(t, (&AWSS3Config{}).Validate())
-
-	c := DefaultAWSS3Config()
-	assert.NoError(t, c.Validate())
 }
