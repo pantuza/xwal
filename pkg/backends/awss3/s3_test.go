@@ -3,6 +3,7 @@ package awss3
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -18,28 +19,28 @@ import (
 	"google.golang.org/protobuf/encoding/protodelim"
 )
 
-// Reusable configuration for tests
+// Reusable configuration for integration tests (Localstack via gnomock).
 var cfg AWSS3Config
 
-// init function to start localstack container and configure the AWS S3 client
-// with the localstack endpoint. This function is called before the tests.
-// Since the localstack container is started only once, the tests can be run
-// multiple times and interact with the same container.
-func init() {
-	// Configures and starts localstack to use only the S3 service
+// localstackUnavailable is true when Docker/Localstack could not be started (e.g. macOS CI without Docker).
+var localstackUnavailable bool
+
+func TestMain(m *testing.M) {
 	p := localstack.Preset(localstack.WithServices(localstack.S3))
 	c, err := gnomock.Start(p)
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "awss3: skipping Localstack integration tests: %v\n", err)
+		localstackUnavailable = true
+		os.Exit(m.Run())
 	}
+	defer func() { _ = gnomock.Stop(c) }()
 
-	// Configures the logger to use the debug level during tests
 	logger, err := logs.NewLogger("debug")
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "awss3: logger: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Configures the AWS S3 WAL Backend to communicate with the localstack container
 	cfg = AWSS3Config{
 		BucketName: "test-bucket",
 		Region:     "sa-east-1",
@@ -50,24 +51,35 @@ func init() {
 		Logger: logger,
 	}
 
-	// Updates the S3 endpoint to localstack container address
 	awsCfg, err := getAWSConfig(&cfg)
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "awss3: AWS config: %v\n", err)
+		os.Exit(1)
 	}
 	s3Endpoint := fmt.Sprintf("http://%s/", c.Address(localstack.APIPort))
 	awsCfg.BaseEndpoint = aws.String(s3Endpoint)
 
 	cfg.AWSConfig = awsCfg
+
+	os.Exit(m.Run())
+}
+
+func skipWithoutLocalstack(t *testing.T) {
+	t.Helper()
+	if localstackUnavailable {
+		t.Skip("Localstack not available (Docker required for integration tests)")
+	}
 }
 
 func TestCreateWALBucket(t *testing.T) {
+	skipWithoutLocalstack(t)
 	wal := NewAWSS3WALBackend(&cfg)
 	err := wal.Open()
 	assert.NoError(t, err)
 }
 
 func TestCreateWALBucketAlreadyExists(t *testing.T) {
+	skipWithoutLocalstack(t)
 	wal := NewAWSS3WALBackend(&cfg)
 	err := wal.Open()
 	assert.NoError(t, err)
@@ -81,6 +93,7 @@ func TestCreateWALBucketAlreadyExists(t *testing.T) {
 
 func setupS3WAL(t *testing.T) *AWSS3WALBackend {
 	t.Helper()
+	skipWithoutLocalstack(t)
 
 	testCfg := cfg
 	testCfg.BucketName = fmt.Sprintf("test-bucket-%d", time.Now().UnixNano())
