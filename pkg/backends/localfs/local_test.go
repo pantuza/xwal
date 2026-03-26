@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -394,8 +395,8 @@ func TestFirstSegmentIndexIsThefirstFileInTheSequence(t *testing.T) {
 	err = wal.extractSegmentsIndexesFromFiles()
 	assert.NoError(t, err)
 
-	assert.Equal(t, uint32(50), wal.firstSegmentIndex)
-	assert.Equal(t, uint32(52), wal.lastSegmentIndex)
+	assert.Equal(t, uint64(50), wal.firstSegmentIndex)
+	assert.Equal(t, uint64(52), wal.lastSegmentIndex)
 }
 
 func TestFirstSegmentIndexSkipsGarbageFiles(t *testing.T) {
@@ -427,8 +428,26 @@ func TestFirstSegmentIndexSkipsGarbageFiles(t *testing.T) {
 	err = wal.extractSegmentsIndexesFromFiles()
 	assert.NoError(t, err)
 
-	assert.Equal(t, uint32(50), wal.firstSegmentIndex)
-	assert.Equal(t, uint32(52), wal.lastSegmentIndex)
+	assert.Equal(t, uint64(50), wal.firstSegmentIndex)
+	assert.Equal(t, uint64(52), wal.lastSegmentIndex)
+}
+
+func TestRotateSegmentFileErrorsWhenSegmentIndexExhausted(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+
+	entry := &xwalpb.WALEntry{LSN: 1, Data: []byte("test data"), CRC: 1}
+	assert.NoError(t, wal.Write([]*xwalpb.WALEntry{entry}))
+
+	wal.lastSegmentIndex = math.MaxUint64
+	err := wal.rotateSegmentsFile()
+	assert.ErrorIs(t, err, ErrSegmentIndexExhausted)
+}
+
+func TestExtractSegmentIndexAcceptsLegacyZeroPaddedNames(t *testing.T) {
+	wal, _ := setupLocalFSWALBackend()
+	idx, err := wal.extractSegmentIndex("wal_00042")
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(42), idx)
 }
 
 func TestGetDirectorySize(t *testing.T) {
@@ -471,12 +490,14 @@ func TestRotateSegmentsFileWhenDirectorySizeHasReachedTheLimit(t *testing.T) {
 	wal.lastSegmentIndex = 5 // set the last segment index to 5 which is the index of the last created file above
 
 	// Since getDirectorySize returns 4.0 GB and the limit is 3.0 GB, the first segment file should be set to garbage
+	evictedFirst := wal.firstSegmentIndex
 	err := wal.rotateSegmentsFileIfNeeded()
 	assert.NoError(t, err)
 
-	// Verify the first segment file was set to garbage
-	_, err = os.Stat(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, wal.firstSegmentIndex)+LFSGarbageFileExtension))
+	// Verify the first segment file was set to garbage and the window advanced so we do not retry the same path.
+	_, err = os.Stat(filepath.Join(dir, fmt.Sprintf(LFSWALSegmentFileFormat, evictedFirst)+LFSGarbageFileExtension))
 	assert.NoError(t, err)
+	assert.Equal(t, evictedFirst+1, wal.firstSegmentIndex)
 }
 
 func TestSetSegmentFileAsGarbage(t *testing.T) {
