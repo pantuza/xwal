@@ -46,13 +46,13 @@ type WALBackendInterface interface {
 	//
 	// Start and end are the suffixes of the Segments files, not the LSN. They are non negative
 	// values and start must be less than or equal to end.
-	ReplayFromRange(channel chan *xwalpb.WALEntry, backwards bool, start, end uint32) error
+	ReplayFromRange(channel chan *xwalpb.WALEntry, backwards bool, start, end uint64) error
 
 	// Creates checkpoint on the WAL. Checkpoints are simply sufixes on the segments
 	// files names that allow users to mark their WAL files by any domain specific
 	// purpose. The method should close the current segments file and rename as the
 	// new checkpoint. Checkpoints naming strategy follows the format:
-	//     wal-00042.checkpoint
+	//     wal_42.checkpoint
 	// Thus, the higher the WAL Segments number, the more recent is the checkpoint.
 	// The method returns the checkpoint segments file number so the user can store
 	// it for later replay from that particular checkpoint further.
