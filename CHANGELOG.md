@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-25
+
+### Changed (breaking)
+
+- **API:** `WALBackendInterface.ReplayFromRange` and `XWAL.ReplayFromRange` now take `start` and `end` as `uint64` segment indices (previously `uint32`).
+- **LocalFS / AWS S3:** Segment object and file names use the `wal_<n>` pattern (for example `wal_0`, `wal_42`); legacy zero-padded names such as `wal_00042` still parse when opening an existing WAL.
+
+### Added
+
+- **LocalFS / AWS S3:** `ErrSegmentIndexExhausted` when the segment counter cannot advance without wrapping.
+- **Docs:** README **Benchmarks** section describing the `benchmark/` package and how to run `make bench`.
+
+### Fixed
+
+- **LocalFS:** Advance `firstSegmentIndex` after evicting the oldest segment when the configured directory size limit is exceeded; compute segment bounds from live segment and checkpoint files only so stale or removed `.garbage` files cannot desync indices; treat a missing segment during eviction (`ENOENT`) as already evicted and advance.
+- **Benchmarks:** Use an isolated temporary WAL directory per benchmark run so results do not depend on shared `/tmp/xwal` state.
+
+[0.4.0]: https://github.com/pantuza/xwal/releases/tag/v0.4.0
+
 ## [0.3.1] - 2026-03-22
 
 ### Fixed
