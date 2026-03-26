@@ -276,7 +276,7 @@ func TestCreateCheckpointOnXWAL(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(0), checkpoint)
 	// Verify the checkpoint was created correctly.
-	_, err = os.Stat(fmt.Sprintf("%s/wal_00000.checkpoint", dir))
+	_, err = os.Stat(fmt.Sprintf("%s/wal_0.checkpoint", dir))
 	assert.NoError(t, err)
 }
 
