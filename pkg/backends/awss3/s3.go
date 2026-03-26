@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	// Segments Object name format of the WAL
-	S3WALSegmentObjectFormat = "wal_%05d"
+	// Segments Object name format of the WAL (decimal index, no fixed width).
+	S3WALSegmentObjectFormat = "wal_%d"
 	S3GarbageObjectExtension = ".garbage"
 	S3CheckpointObjectSuffix = ".checkpoint"
 )
@@ -36,8 +36,8 @@ type AWSS3WALBackend struct {
 	waitGroup         sync.WaitGroup
 	cleanLogsInterval *time.Ticker
 
-	firstSegmentIndex uint32
-	lastSegmentIndex  uint32
+	firstSegmentIndex uint64
+	lastSegmentIndex  uint64
 
 	currentSegmentObjectName string
 	lastLSN                  uint64
@@ -164,7 +164,11 @@ func (wal *AWSS3WALBackend) rotateSegmentsIfNeeded() error {
 	}
 
 	if currentSegmentSize >= int64(wal.cfg.SegmentsObjectSizeMB)*1024*1024 {
-		wal.lastSegmentIndex++
+		next, err := nextSegmentIndex(wal.lastSegmentIndex)
+		if err != nil {
+			return err
+		}
+		wal.lastSegmentIndex = next
 		wal.currentSegmentObjectName = fmt.Sprintf(S3WALSegmentObjectFormat, wal.lastSegmentIndex)
 	}
 
@@ -222,7 +226,7 @@ func (wal *AWSS3WALBackend) Replay(channel chan *xwalpb.WALEntry, backwards bool
 	return wal.replaySegments(segments, channel, backwards)
 }
 
-func (wal *AWSS3WALBackend) ReplayFromRange(channel chan *xwalpb.WALEntry, backwards bool, start, end uint32) error {
+func (wal *AWSS3WALBackend) ReplayFromRange(channel chan *xwalpb.WALEntry, backwards bool, start, end uint64) error {
 	if start > end || start < wal.firstSegmentIndex || end > wal.lastSegmentIndex {
 		return fmt.Errorf("invalid range: start=%d end=%d (first segment index=%d last=%d)", start, end, wal.firstSegmentIndex, wal.lastSegmentIndex)
 	}
@@ -244,16 +248,20 @@ func (wal *AWSS3WALBackend) CreateCheckpoint() (uint64, error) {
 		return 0, fmt.Errorf("rename segment object to checkpoint: %w", err)
 	}
 
-	wal.lastSegmentIndex++
+	next, err := nextSegmentIndex(wal.lastSegmentIndex)
+	if err != nil {
+		return 0, err
+	}
+	wal.lastSegmentIndex = next
 	wal.currentSegmentObjectName = fmt.Sprintf(S3WALSegmentObjectFormat, wal.lastSegmentIndex)
-	return uint64(checkpointIndex), nil
+	return checkpointIndex, nil
 }
 
 func (wal *AWSS3WALBackend) ReplayFromCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error {
-	if checkpoint > uint64(wal.lastSegmentIndex) {
+	if checkpoint > wal.lastSegmentIndex {
 		return fmt.Errorf("invalid checkpoint %d (last segment index=%d)", checkpoint, wal.lastSegmentIndex)
 	}
-	segments, err := wal.getSegmentsObjectNamesFromOrToCheckpoint(uint32(checkpoint), wal.lastSegmentIndex, uint32(checkpoint))
+	segments, err := wal.getSegmentsObjectNamesFromOrToCheckpoint(checkpoint, wal.lastSegmentIndex, checkpoint)
 	if err != nil {
 		return fmt.Errorf("get segment objects from checkpoint: %w", err)
 	}
@@ -264,10 +272,10 @@ func (wal *AWSS3WALBackend) ReplayFromCheckpoint(channel chan *xwalpb.WALEntry, 
 }
 
 func (wal *AWSS3WALBackend) ReplayToCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error {
-	if checkpoint > uint64(wal.lastSegmentIndex) {
+	if checkpoint > wal.lastSegmentIndex {
 		return fmt.Errorf("invalid checkpoint %d (last segment index=%d)", checkpoint, wal.lastSegmentIndex)
 	}
-	segments, err := wal.getSegmentsObjectNamesFromOrToCheckpoint(wal.firstSegmentIndex, uint32(checkpoint), uint32(checkpoint))
+	segments, err := wal.getSegmentsObjectNamesFromOrToCheckpoint(wal.firstSegmentIndex, checkpoint, checkpoint)
 	if err != nil {
 		return fmt.Errorf("get segment objects to checkpoint: %w", err)
 	}
@@ -297,7 +305,7 @@ func (wal *AWSS3WALBackend) extractSegmentsIndexesFromObjects() error {
 		return err
 	}
 
-	wal.firstSegmentIndex = math.MaxUint32
+	wal.firstSegmentIndex = math.MaxUint64
 	wal.lastSegmentIndex = 0
 	for _, obj := range objects {
 		if obj.Key == nil {
@@ -305,6 +313,9 @@ func (wal *AWSS3WALBackend) extractSegmentsIndexesFromObjects() error {
 		}
 		idx, err := wal.extractSegmentIndex(*obj.Key)
 		if err == ErrInvalidSegmentIndex {
+			if idx == math.MaxUint64 {
+				return fmt.Errorf("garbage segment index overflow for object %q", *obj.Key)
+			}
 			wal.firstSegmentIndex = idx + 1
 			continue
 		}
@@ -315,17 +326,20 @@ func (wal *AWSS3WALBackend) extractSegmentsIndexesFromObjects() error {
 			wal.lastSegmentIndex = idx
 		}
 	}
-	if wal.firstSegmentIndex == math.MaxUint32 {
+	if wal.firstSegmentIndex == math.MaxUint64 {
 		wal.firstSegmentIndex = 0
 		wal.lastSegmentIndex = 0
 	}
 	return nil
 }
 
+// ErrSegmentIndexExhausted is returned when the segment counter would exceed the representable range.
+var ErrSegmentIndexExhausted = errors.New("wal segment index exhausted")
+
 var ErrInvalidSegmentIndex = errors.New("invalid segment index: object name indicates garbage segment")
 
-func (wal *AWSS3WALBackend) extractSegmentIndex(objectName string) (uint32, error) {
-	var index uint32
+func (wal *AWSS3WALBackend) extractSegmentIndex(objectName string) (uint64, error) {
+	var index uint64
 	if _, err := fmt.Sscanf(objectName, S3WALSegmentObjectFormat, &index); err != nil {
 		return index, ErrInvalidSegmentIndex
 	}
@@ -383,12 +397,12 @@ func isS3NotFound(err error) bool {
 	return false
 }
 
-func (wal *AWSS3WALBackend) getSegmentsObjectNamesFromRange(start, end uint32) ([]string, error) {
+func (wal *AWSS3WALBackend) getSegmentsObjectNamesFromRange(start, end uint64) ([]string, error) {
 	objects, err := wal.listWALObjects()
 	if err != nil {
 		return nil, err
 	}
-	indexToObject := make(map[uint32]string, len(objects))
+	indexToObject := make(map[uint64]string, len(objects))
 	for _, obj := range objects {
 		if obj.Key == nil || *obj.Key == "" {
 			continue
@@ -397,7 +411,7 @@ func (wal *AWSS3WALBackend) getSegmentsObjectNamesFromRange(start, end uint32) (
 		if len(name) >= len(S3GarbageObjectExtension) && name[len(name)-len(S3GarbageObjectExtension):] == S3GarbageObjectExtension {
 			continue
 		}
-		var idx uint32
+		var idx uint64
 		if _, err := fmt.Sscanf(name, S3WALSegmentObjectFormat, &idx); err == nil {
 			indexToObject[idx] = name
 		}
@@ -417,14 +431,14 @@ func (wal *AWSS3WALBackend) getSegmentsObjectNamesFromRange(start, end uint32) (
 	return files, nil
 }
 
-func (wal *AWSS3WALBackend) getSegmentsObjectNamesFromOrToCheckpoint(start, end, checkpoint uint32) ([]string, error) {
+func (wal *AWSS3WALBackend) getSegmentsObjectNamesFromOrToCheckpoint(start, end, checkpoint uint64) ([]string, error) {
 	segments, err := wal.getSegmentsObjectNamesFromRange(start, end)
 	if err != nil {
 		return nil, err
 	}
 	expectedCheckpointName := fmt.Sprintf(S3WALSegmentObjectFormat, checkpoint) + S3CheckpointObjectSuffix
 	for i, seg := range segments {
-		var idx uint32
+		var idx uint64
 		if _, err := fmt.Sscanf(seg, S3WALSegmentObjectFormat, &idx); err == nil && idx == checkpoint {
 			segments[i] = expectedCheckpointName
 		}
@@ -463,7 +477,11 @@ func (wal *AWSS3WALBackend) replaySegments(segments []string, channel chan *xwal
 			return err
 		}
 	}
-	wal.lastSegmentIndex++
+	next, err := nextSegmentIndex(wal.lastSegmentIndex)
+	if err != nil {
+		return err
+	}
+	wal.lastSegmentIndex = next
 	wal.currentSegmentObjectName = fmt.Sprintf(S3WALSegmentObjectFormat, wal.lastSegmentIndex)
 	wal.firstSegmentIndex = wal.lastSegmentIndex
 	return nil
@@ -518,4 +536,11 @@ func (wal *AWSS3WALBackend) getLastLogSequencyNumber() error {
 		wal.lastLSN = entries[len(entries)-1].GetLSN()
 	}
 	return nil
+}
+
+func nextSegmentIndex(cur uint64) (uint64, error) {
+	if cur == math.MaxUint64 {
+		return 0, ErrSegmentIndexExhausted
+	}
+	return cur + 1, nil
 }
