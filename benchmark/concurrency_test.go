@@ -10,6 +10,7 @@ import (
 // Tests multiple functions calling wal.Write concurrently
 func BenchmarkConcurrentWrites(b *testing.B) {
 	cfg := xwal.NewXWALConfig("")
+	cfg.BackendConfig.LocalFS.DirPath = b.TempDir()
 	xwal, err := xwal.NewXWAL(cfg)
 	assert.NoError(b, err)
 	defer func() { _ = xwal.Close() }()
