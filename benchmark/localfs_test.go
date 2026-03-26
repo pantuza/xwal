@@ -10,6 +10,7 @@ import (
 func BenchmarkLocalFSReplay(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		cfg := xwal.NewXWALConfig("")
+		cfg.BackendConfig.LocalFS.DirPath = b.TempDir()
 		cfg.BufferSize = 1
 		cfg.BufferEntriesLength = 5
 		wal, err := xwal.NewXWAL(cfg)
