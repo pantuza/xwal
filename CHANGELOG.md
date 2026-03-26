@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-03-25
+
+### Fixed
+
+- **Benchmarks:** Ensure `BenchmarkLocalFSReplay` closes the WAL each iteration so Windows can delete `b.TempDir()` trees during cleanup.
+
+[0.4.1]: https://github.com/pantuza/xwal/releases/tag/v0.4.1
+
 ## [0.4.0] - 2026-03-25
 
 ### Changed (breaking)
