@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,8 +24,8 @@ const (
 	// Default directory permission for the Local File System Backend
 	LFSDefaultDirPermission = 0744
 
-	// Segments files of the WAL are named using this format
-	LFSWALSegmentFileFormat = "wal_%05d"
+	// Segments files of the WAL are named using this format (decimal index, no fixed width).
+	LFSWALSegmentFileFormat = "wal_%d"
 
 	// Files with this extension are considered garbage and will be deleted
 	LFSGarbageFileExtension = ".garbage"
@@ -36,6 +37,11 @@ const (
 // Error message for when trying to extract an invalid segment index from a .garbage file
 var ErrInvalidSegmentIndex = errors.New("invalid segment index: file name indicates garbage segment")
 
+// ErrSegmentIndexExhausted is returned when the segment counter would exceed the representable range.
+// Restarting names from 0 is unsafe while older segment files may still exist; callers must archive
+// or compact the WAL before reusing indices.
+var ErrSegmentIndexExhausted = errors.New("wal segment index exhausted")
+
 type LocalFSWALBackend struct {
 	cfg *LocalFSConfig
 
@@ -44,8 +50,8 @@ type LocalFSWALBackend struct {
 	waitGroup         sync.WaitGroup
 	cleanLogsInterval *time.Ticker
 
-	firstSegmentIndex uint32
-	lastSegmentIndex  uint32
+	firstSegmentIndex uint64
+	lastSegmentIndex  uint64
 
 	currentSegmentFile *os.File
 	lastLSN            uint64
@@ -109,30 +115,41 @@ func (wal *LocalFSWALBackend) extractSegmentsIndexesFromFiles() error {
 		return fmt.Errorf("read wal directory %q: %w", wal.cfg.DirPath, err)
 	}
 
-	wal.firstSegmentIndex = math.MaxUint32
+	wal.firstSegmentIndex = math.MaxUint64
 	wal.lastSegmentIndex = 0
+	found := false
 
 	for _, file := range files {
-
-		index, err := wal.extractSegmentIndex(file.Name())
-		if err == ErrInvalidSegmentIndex {
-			// Skip garbage files but update the first segment file with the next index right after the garbage file
-			wal.firstSegmentIndex = index + 1
+		name := file.Name()
+		var stem string
+		switch filepath.Ext(name) {
+		case LFSGarbageFileExtension:
+			// Stale .garbage entries are ignored: min/max come only from live segment and checkpoint paths.
+			continue
+		case LFSCheckpointFileExtension:
+			stem = strings.TrimSuffix(name, LFSCheckpointFileExtension)
+		case "":
+			stem = name
+		default:
 			continue
 		}
 
-		if index > wal.lastSegmentIndex {
-			wal.lastSegmentIndex = index
+		index, err := wal.extractSegmentIndex(stem)
+		if err != nil {
+			continue
 		}
+		found = true
 		if index < wal.firstSegmentIndex {
 			wal.firstSegmentIndex = index
 		}
+		if index > wal.lastSegmentIndex {
+			wal.lastSegmentIndex = index
+		}
 	}
 
-	if wal.firstSegmentIndex == math.MaxUint32 {
-		// If firstSegmentIndex keeps being the maximum value,
-		// it means there are no segment files and we should start from 0
+	if !found {
 		wal.firstSegmentIndex = 0
+		wal.lastSegmentIndex = 0
 	}
 
 	return nil
@@ -151,10 +168,9 @@ func (wal *LocalFSWALBackend) openCurrentSegmentFile() error {
 	return nil
 }
 
-// Segments files names format is: wal_00000. The last 5 characters are the index.
-// This function extracts the segment Index.
-func (wal *LocalFSWALBackend) extractSegmentIndex(filename string) (uint32, error) {
-	var index uint32
+// Segments files names format is: wal_<index> (decimal). This function extracts the segment index.
+func (wal *LocalFSWALBackend) extractSegmentIndex(filename string) (uint64, error) {
+	var index uint64
 	if _, err := fmt.Sscanf(filename, LFSWALSegmentFileFormat, &index); err != nil {
 		return index, ErrInvalidSegmentIndex
 	}
@@ -210,10 +226,29 @@ func (wal *LocalFSWALBackend) rotateSegmentsFileIfNeeded() error {
 
 	// Rotates (setting it as garbage) the first segment file if the directory size reaches ruffly the maximum size
 	if wal.getDirectorySize() > float32(wal.cfg.SegmentsDirSizeGB) {
+		// Only evict when there is an older segment distinct from the active tail; otherwise the sole segment
+		// is the live WAL file and cannot be removed here without opening a new segment.
+		if wal.firstSegmentIndex >= wal.lastSegmentIndex {
+			return nil
+		}
 		firstSegmentFileName := filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, wal.firstSegmentIndex))
 		if err := wal.setSegmentFileAsGarbage(firstSegmentFileName); err != nil {
+			// Already renamed, removed by cleanup, or never present — advance so we do not retry forever.
+			if errors.Is(err, os.ErrNotExist) {
+				nextFirst, e := nextSegmentIndex(wal.firstSegmentIndex)
+				if e != nil {
+					return e
+				}
+				wal.firstSegmentIndex = nextFirst
+				return nil
+			}
 			return err
 		}
+		nextFirst, err := nextSegmentIndex(wal.firstSegmentIndex)
+		if err != nil {
+			return err
+		}
+		wal.firstSegmentIndex = nextFirst
 	}
 
 	return nil
@@ -224,8 +259,11 @@ func (wal *LocalFSWALBackend) rotateSegmentsFileIfNeeded() error {
 // we would need to walk through all files and sum their sizes. This is a very expensive operation. It would be
 // called on every Write operation. Thus, we are using this ruffly calculation.
 func (wal *LocalFSWALBackend) getDirectorySize() float32 {
-	numberOfFiles := uint32(wal.lastSegmentIndex-wal.firstSegmentIndex) + 1
-	return float32(uint32(wal.cfg.SegmentsFileSizeMB)*numberOfFiles) / 1024 // in Gb
+	if wal.lastSegmentIndex < wal.firstSegmentIndex {
+		return 0
+	}
+	numberOfFiles := wal.lastSegmentIndex - wal.firstSegmentIndex + 1
+	return float32(uint64(wal.cfg.SegmentsFileSizeMB)*numberOfFiles) / 1024 // in Gb
 }
 
 // Rotates current segments file. It closes the actual segment file and opens a new one.
@@ -237,7 +275,11 @@ func (wal *LocalFSWALBackend) rotateSegmentsFile() error {
 		}
 		wal.currentSegmentFile = nil
 	}
-	wal.lastSegmentIndex++
+	next, err := nextSegmentIndex(wal.lastSegmentIndex)
+	if err != nil {
+		return err
+	}
+	wal.lastSegmentIndex = next
 
 	if err := wal.openCurrentSegmentFile(); err != nil {
 		return fmt.Errorf("open segment file after rotate (index %d): %w", wal.lastSegmentIndex, err)
@@ -254,7 +296,11 @@ func (wal *LocalFSWALBackend) CreateCheckpoint() (uint64, error) {
 		return 0, fmt.Errorf("close current segment file for checkpoint: %w", err)
 	}
 	checkpointIndex := wal.lastSegmentIndex
-	wal.lastSegmentIndex++
+	next, err := nextSegmentIndex(wal.lastSegmentIndex)
+	if err != nil {
+		return 0, err
+	}
+	wal.lastSegmentIndex = next
 
 	checkpointFileName := filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, checkpointIndex)+LFSCheckpointFileExtension)
 	if err := os.Rename(wal.currentSegmentFile.Name(), checkpointFileName); err != nil {
@@ -265,7 +311,14 @@ func (wal *LocalFSWALBackend) CreateCheckpoint() (uint64, error) {
 		return 0, fmt.Errorf("open segment file after checkpoint (index %d): %w", checkpointIndex, err)
 	}
 
-	return uint64(checkpointIndex), nil
+	return checkpointIndex, nil
+}
+
+func nextSegmentIndex(cur uint64) (uint64, error) {
+	if cur == math.MaxUint64 {
+		return 0, ErrSegmentIndexExhausted
+	}
+	return cur + 1, nil
 }
 
 // Replay replays the entries from the segment files to the channel.
@@ -287,7 +340,7 @@ func (wal *LocalFSWALBackend) Replay(channel chan *xwalpb.WALEntry, backwards bo
 // ReplayFromRange replays the entries from the segment files to the channel.
 // It allows to replay the entries from the given range of Segments Files in a backwards order.
 // It always respects the range provided. If a invalid range is provided, it will return an error.
-func (wal *LocalFSWALBackend) ReplayFromRange(channel chan *xwalpb.WALEntry, backwards bool, start, end uint32) error {
+func (wal *LocalFSWALBackend) ReplayFromRange(channel chan *xwalpb.WALEntry, backwards bool, start, end uint64) error {
 	if start < wal.firstSegmentIndex || end > wal.lastSegmentIndex {
 		return fmt.Errorf("invalid range provided: start %d, end %d. first segment file index %d, last segment file index %d", start, end, wal.firstSegmentIndex, wal.lastSegmentIndex)
 	}
@@ -308,11 +361,11 @@ func (wal *LocalFSWALBackend) ReplayFromRange(channel chan *xwalpb.WALEntry, bac
 // replayed backwards: from the end of the WAL til the given checkpoint.
 // Entries read from the WAL should be sent to the given channel.
 func (wal *LocalFSWALBackend) ReplayFromCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error {
-	if checkpoint > uint64(wal.lastSegmentIndex) {
+	if checkpoint > wal.lastSegmentIndex {
 		return fmt.Errorf("invalid checkpoint provided: checkpoint %d, last segment file index %d", checkpoint, wal.lastSegmentIndex)
 	}
 
-	segmentsFiles, err := wal.getSegmentsFilesFromOrToCheckpoint(uint32(checkpoint), wal.lastSegmentIndex, uint32(checkpoint))
+	segmentsFiles, err := wal.getSegmentsFilesFromOrToCheckpoint(checkpoint, wal.lastSegmentIndex, checkpoint)
 	if err != nil {
 		return fmt.Errorf("get segment files from range while replaying from checkpoint: %w", err)
 	}
@@ -328,11 +381,11 @@ func (wal *LocalFSWALBackend) ReplayFromCheckpoint(channel chan *xwalpb.WALEntry
 // replayed backwards: from the given checkpoint til the beginning of the WAL.
 // Entries read from the WAL should be sent to the given channel.
 func (wal *LocalFSWALBackend) ReplayToCheckpoint(channel chan *xwalpb.WALEntry, checkpoint uint64, backwards bool) error {
-	if checkpoint > uint64(wal.lastSegmentIndex) {
+	if checkpoint > wal.lastSegmentIndex {
 		return fmt.Errorf("invalid checkpoint provided: checkpoint %d, last segment file index %d", checkpoint, wal.lastSegmentIndex)
 	}
 
-	segmentsFiles, err := wal.getSegmentsFilesFromOrToCheckpoint(wal.firstSegmentIndex, uint32(checkpoint), uint32(checkpoint))
+	segmentsFiles, err := wal.getSegmentsFilesFromOrToCheckpoint(wal.firstSegmentIndex, checkpoint, checkpoint)
 	if err != nil {
 		return fmt.Errorf("get segment files from range while replaying to checkpoint: %w", err)
 	}
@@ -344,7 +397,7 @@ func (wal *LocalFSWALBackend) ReplayToCheckpoint(channel chan *xwalpb.WALEntry, 
 	return wal.replaySegments(segmentsFiles, channel, backwards)
 }
 
-func (wal *LocalFSWALBackend) getSegmentsFilesFromRange(start, end uint32) ([]string, error) {
+func (wal *LocalFSWALBackend) getSegmentsFilesFromRange(start, end uint64) ([]string, error) {
 	var files []string
 	for i := start; i <= end; i++ {
 		files = append(files, filepath.Join(wal.cfg.DirPath, fmt.Sprintf(LFSWALSegmentFileFormat, i)))
@@ -359,7 +412,7 @@ func (wal *LocalFSWALBackend) getSegmentsFilesFromRange(start, end uint32) ([]st
 
 // getSegmentsFilesFromOrToCheckpoint returns the segment files from the given range considering the checkpoint.
 // Checkpoint files have a suffix that should be considered when opening the file.
-func (wal *LocalFSWALBackend) getSegmentsFilesFromOrToCheckpoint(start, end, checkpoint uint32) ([]string, error) {
+func (wal *LocalFSWALBackend) getSegmentsFilesFromOrToCheckpoint(start, end, checkpoint uint64) ([]string, error) {
 	var files []string
 	suffix := ""
 	for i := start; i <= end; i++ {
