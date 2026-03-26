@@ -302,7 +302,7 @@ func (wal *XWAL) Replay(callback ReplayCallbackFunc, batchSize int, backwards bo
 	return nil
 }
 
-func (wal *XWAL) ReplayFromRange(callback ReplayCallbackFunc, batchSize int, backwards bool, start, end uint32) error {
+func (wal *XWAL) ReplayFromRange(callback ReplayCallbackFunc, batchSize int, backwards bool, start, end uint64) error {
 	if wal.closed {
 		return fmt.Errorf("xwal is closed: no more replays are allowed")
 	}
