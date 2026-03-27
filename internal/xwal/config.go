@@ -1,6 +1,7 @@
 package xwal
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -74,9 +75,37 @@ func loadDefaultConfigValues() *XWALConfig {
 	}
 }
 
+func (cfg *XWALConfig) Validate() error {
+	if cfg == nil {
+		return fmt.Errorf("xwal config is required")
+	}
+	if cfg.BufferSize <= 0 {
+		return fmt.Errorf("bufferSize must be greater than zero")
+	}
+	if cfg.BufferEntriesLength <= 0 {
+		return fmt.Errorf("bufferEntriesLength must be greater than zero")
+	}
+	if cfg.FlushFrequency <= 0 {
+		return fmt.Errorf("flushFrequency must be greater than zero")
+	}
+	if cfg.BackendConfig.LocalFS == nil {
+		return fmt.Errorf("backends.localfs config is required")
+	}
+	if err := cfg.BackendConfig.LocalFS.Validate(); err != nil {
+		return err
+	}
+	if cfg.BackendConfig.AWSS3 != nil {
+		if err := cfg.BackendConfig.AWSS3.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Loads configuration from a YAML file. It applies default values for missing options.
 func loadConfigFromFile(filename string) (*XWALConfig, error) {
-	var config XWALConfig // loadDefaultConfigValues()
+	defaults := loadDefaultConfigValues()
+	config := *defaults
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -87,6 +116,15 @@ func loadConfigFromFile(filename string) (*XWALConfig, error) {
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		// TODO: Log to stdout we couldn't Unmarshal the config file return config, nil
 		return nil, err
+	}
+
+	// Unmarshal can nil nested pointers when yaml keys are omitted or explicitly null.
+	// Keep defaults so partial configuration files behave predictably.
+	if config.BackendConfig.LocalFS == nil {
+		config.BackendConfig.LocalFS = defaults.BackendConfig.LocalFS
+	}
+	if config.BackendConfig.AWSS3 == nil {
+		config.BackendConfig.AWSS3 = defaults.BackendConfig.AWSS3
 	}
 
 	return &config, nil
