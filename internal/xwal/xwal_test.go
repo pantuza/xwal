@@ -79,6 +79,16 @@ func TestWriteWithUnknownWALBackend(t *testing.T) {
 	assert.Contains(t, err.Error(), "wal backend not initialized")
 }
 
+func TestNewXWALWithInvalidConfig(t *testing.T) {
+	cfg := NewXWALConfig("")
+	cfg.FlushFrequency = 0
+
+	wal, err := NewXWAL(cfg)
+	assert.Error(t, err)
+	assert.Nil(t, wal)
+	assert.Contains(t, err.Error(), "invalid xwal config")
+}
+
 func TestWriteWhenTheWalIsAlreadyClosed(t *testing.T) {
 	dir, err := os.MkdirTemp("", "wal_test")
 	assert.NoError(t, err)
