@@ -79,5 +79,12 @@ func (cfg *AWSS3Config) Validate() error {
 	if cfg.SegmentsBucketSizeGB == 0 {
 		return fmt.Errorf("segmentsBucketSizeGB must be greater than zero")
 	}
+	maxObjectSizeMB := uint64(cfg.SegmentsBucketSizeGB) * 1024
+	if uint64(cfg.SegmentsObjectSizeMB) > maxObjectSizeMB {
+		return fmt.Errorf("segmentsObjectSizeMB must be less than or equal to segmentsBucketSizeGB in MB")
+	}
+	if cfg.CleanLogsInterval <= 0 {
+		return fmt.Errorf("cleanLogsInterval must be greater than zero")
+	}
 	return nil
 }
