@@ -56,6 +56,10 @@ type XWAL struct {
 }
 
 func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid xwal config: %w", err)
+	}
+
 	logger, err := logs.NewLogger(cfg.LogLevel)
 	if err != nil {
 		return nil, fmt.Errorf("creating logger: %w", err)
