@@ -59,8 +59,14 @@ type LocalFSWALBackend struct {
 }
 
 func NewLocalFSWALBackend(cfg *LocalFSConfig) *LocalFSWALBackend {
+	if cfg == nil {
+		cfg = DefaultLocalFSConfig()
+	}
 	if cfg.CleanLogsInterval == 0 {
 		cfg.CleanLogsInterval = 1 * time.Minute // Default interval to clean garbage logs
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = zap.NewNop()
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -78,6 +84,9 @@ func NewLocalFSWALBackend(cfg *LocalFSConfig) *LocalFSWALBackend {
 }
 
 func (wal *LocalFSWALBackend) Open() error {
+	if err := wal.cfg.Validate(); err != nil {
+		return err
+	}
 	if err := wal.createWALDir(); err != nil {
 		return err
 	}
