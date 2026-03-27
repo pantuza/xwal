@@ -2,6 +2,7 @@ package awss3
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,6 +35,29 @@ func TestAWSS3Config_Validate_errors(t *testing.T) {
 
 		cfg.SegmentsObjectSizeMB = 1
 		cfg.SegmentsBucketSizeGB = 0
+		assert.Error(t, cfg.Validate())
+	})
+
+	t.Run("segment object larger than bucket", func(t *testing.T) {
+		t.Parallel()
+		cfg := &AWSS3Config{
+			BucketName:           "b",
+			Region:               "us-east-1",
+			SegmentsObjectSizeMB: 2049,
+			SegmentsBucketSizeGB: 2,
+			CleanLogsInterval:    time.Second,
+		}
+		assert.Error(t, cfg.Validate())
+	})
+
+	t.Run("invalid clean interval", func(t *testing.T) {
+		t.Parallel()
+		cfg := &AWSS3Config{
+			BucketName:           "b",
+			Region:               "us-east-1",
+			SegmentsObjectSizeMB: 1,
+			SegmentsBucketSizeGB: 1,
+		}
 		assert.Error(t, cfg.Validate())
 	})
 }
