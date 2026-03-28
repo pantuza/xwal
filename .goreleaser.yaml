@@ -5,9 +5,9 @@ version: 1
 
 release:
   header: |
-    ### OpenTelemetry observability
+    ### v0.6 — public API, docs, and tooling
 
-    This release adds **OpenTelemetry metrics and traces** for WAL appends, buffer flushes, backend persistence, replay, and checkpoints. Configure your service **`MeterProvider`** and **`TracerProvider`** (globals or `XWALConfig.Telemetry`) so xwal exports alongside the rest of your stack—typically **OTel → Prometheus** for metrics and **OTLP** for traces. Full instrument and span reference: **[OBSERVABILITY.md](https://github.com/pantuza/xwal/blob/{{ .Tag }}/OBSERVABILITY.md)**. Local demo: **`make run_telemetry_example`**.
+    The stable import path is **`github.com/pantuza/xwal`** (root `package xwal`). Replace any former `internal/xwal` imports. This release adds **sentinel flush errors** (`buffer.ErrShouldFlushBuffer` + `errors.Is`), **CONTRIBUTING**, **SECURITY**, **BACKENDS** guides, **pkg.go.dev** [`doc.go`](https://github.com/pantuza/xwal/blob/{{ .Tag }}/doc.go), **README** durability and positioning, **golangci-lint v2** [config](https://github.com/pantuza/xwal/blob/{{ .Tag }}/.golangci.yml), and **quieter default config** loading (missing default `xwal.yaml` with `NewXWALConfig("")` does not log). OpenTelemetry from v0.5 is unchanged—see **[OBSERVABILITY.md](https://github.com/pantuza/xwal/blob/{{ .Tag }}/OBSERVABILITY.md)**.
 
     ---
 
