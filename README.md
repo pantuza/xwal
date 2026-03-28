@@ -77,6 +77,12 @@ if err != nil {
 - Replay with ordered delivery to a callback for recovery or reprocessing.
 - Configurable segment sizing, buffer limits, logging (zap), and backend-specific options.
 
+## Observability
+
+xwal emits **OpenTelemetry metrics** (counters, histograms, and async gauges for buffer state, LSN, segment index) and **traces** (spans for append, flush, backend write, replay, and checkpoint). Your service decides how to export them: for example **OTel Metrics → Prometheus** on your existing `/metrics` endpoint, and **OTLP traces** to Jaeger, Tempo, or the OpenTelemetry Collector. By default, global OTel providers are no-op until you configure them; use **`WriteContext` / `WriteBatchContext`** to attach WAL spans under incoming request traces.
+
+**Full reference:** metric names, attributes, span names, setup steps, and a runnable stdout demo are documented in [**OBSERVABILITY.md**](./OBSERVABILITY.md).
+
 ## Benchmarks
 
 Micro-benchmarks live in [`benchmark/`](./benchmark/): they exercise the in-memory buffer (`BenchmarkWrite`), concurrent `XWAL.Write` calls (`BenchmarkConcurrentWrites`, each run uses an isolated temp WAL directory), and a small LocalFS write plus replay loop (`BenchmarkLocalFSReplay`). Run them with `make bench` (or `go test ./benchmark/ -bench .`); the Makefile runs five iterations per benchmark with the race detector enabled, matching CI-style checks.
