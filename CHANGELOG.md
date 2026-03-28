@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-28
+
 ### Changed (breaking)
 
 - **Import path:** The stable public API is now the module root package `github.com/pantuza/xwal` (Go sources next to `go.mod`). The former `github.com/pantuza/xwal/internal/xwal` path is removed; update imports accordingly.
@@ -22,10 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Docs:** Root [doc.go](doc.go) for pkg.go.dev, [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [BACKENDS.md](BACKENDS.md); README durability notes and positioning; dynamic GitHub release badge.
+- **Tooling:** [.golangci.yml](.golangci.yml) for golangci-lint v2 (`linters.default: standard`), validated in CI.
 
 ### Fixed
 
 - **Config:** When the YAML file cannot be loaded, fall back to defaults; log with the standard library `log` package only if the path was **explicit** or the error is not “file not found” for the default `xwal.yaml` used by `NewXWALConfig("")` (avoids noisy output in tests and code-only setups).
+
+[0.6.0]: https://github.com/pantuza/xwal/releases/tag/v0.6.0
 
 ## [0.5.0] - 2026-03-28
 
