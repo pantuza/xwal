@@ -7,9 +7,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	ErrorShouldFlushBuffer = "buffer should be flushed before writing"
-)
+// ErrShouldFlushBuffer is returned by Write when the in-memory buffer must be
+// flushed before accepting another entry (size or entry-count limit). Callers
+// should flush and retry; xwal uses errors.Is to detect this sentinel.
+var ErrShouldFlushBuffer = errors.New("buffer should be flushed before writing")
 
 type InMemoryBuffer struct {
 	MaxBufferSizeMB float64
@@ -33,7 +34,7 @@ func (b *InMemoryBuffer) Write(entry *xwalpb.WALEntry) error {
 	entry_size := float64(proto.Size(entry)) / 1024 / 1024
 
 	if b.MBCounter+entry_size > b.MaxBufferSizeMB || b.WritesCounter >= b.NumberOfEntries {
-		return errors.New(ErrorShouldFlushBuffer)
+		return ErrShouldFlushBuffer
 	}
 
 	b.Buffer = append(b.Buffer, entry)
