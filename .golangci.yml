@@ -1,4 +1,4 @@
-# https://golangci-lint.run/jsonschema/golangci.jsonschema.json
+# https://golangci-lint.run/docs/configuration/file
 version: "2"
 
 run:
@@ -6,11 +6,3 @@ run:
 
 linters:
   default: standard
-
-formatters:
-  default:
-    - gofmt
-    - goimports
-
-issues:
-  exclude-use-default: true
