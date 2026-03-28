@@ -1,0 +1,16 @@
+# https://golangci-lint.run/jsonschema/golangci.jsonschema.json
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+
+formatters:
+  default:
+    - gofmt
+    - goimports
+
+issues:
+  exclude-use-default: true
