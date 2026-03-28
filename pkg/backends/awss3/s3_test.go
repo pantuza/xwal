@@ -15,9 +15,12 @@ import (
 	"github.com/orlangure/gnomock"
 	"github.com/orlangure/gnomock/preset/localstack"
 	"github.com/pantuza/xwal/internal/logs"
+	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"google.golang.org/protobuf/encoding/protodelim"
 )
+
+var _ types.WALSegmentIndexer = (*AWSS3WALBackend)(nil)
 
 // Reusable configuration for integration tests (Localstack via gnomock).
 var cfg AWSS3Config

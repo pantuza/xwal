@@ -299,6 +299,11 @@ func (wal *AWSS3WALBackend) IncLastIndex() {
 	wal.lastLSN++
 }
 
+// CurrentSegmentIndex implements types.WALSegmentIndexer for observability.
+func (wal *AWSS3WALBackend) CurrentSegmentIndex() uint64 {
+	return wal.lastSegmentIndex
+}
+
 func (wal *AWSS3WALBackend) extractSegmentsIndexesFromObjects() error {
 	objects, err := wal.listWALObjects()
 	if err != nil {

@@ -10,11 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/encoding/protodelim"
 	"google.golang.org/protobuf/proto"
 )
+
+var _ types.WALSegmentIndexer = (*LocalFSWALBackend)(nil)
 
 func setupLocalFSWALBackend() (*LocalFSWALBackend, string) {
 	// Create a temporary directory for WAL files.

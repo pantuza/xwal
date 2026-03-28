@@ -129,6 +129,12 @@ run_simple_example: ./examples/simple/main.go _clrscr ## Runs xWAL with LocalFS 
 	@go run $<
 
 
+.PHONY: run_telemetry_example
+run_telemetry_example: ./examples/telemetry/main.go _clrscr ## Runs xWAL with stdout/stderr OTel exporters (metrics + traces)
+	$(call title, Running xWAL telemetry example..)
+	@go run $<
+
+
 .PHONY: run_awss3_example
 run_awss3_example: ./examples/awss3/main.go _clrscr ## Runs xWAL with AWS s3 backend example
 	$(call title, Running xWAL with AWS s3 backend example..)

@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-03-28
+
+### Added
+
+- **Observability (OpenTelemetry):** Metrics (counters, histograms, asynchronous gauges) and traces for WAL appends, buffer flushes, backend writes, replay, checkpoints, and replay callback outcomes. Instrumentation scope `github.com/pantuza/xwal`; works with the process-wide OTel `MeterProvider` / `TracerProvider` or explicit `XWALConfig.Telemetry` (`MeterProvider`, `TracerProvider`, `Disabled`).
+- **API:** `WriteContext`, `WriteBatchContext` for trace context propagation; `Write` / `WriteBatch` delegate to these with `context.Background()`.
+- **Config:** `XWALConfig.Telemetry` and `TelemetryConfig` for optional providers or disabling instrumentation.
+- **Backends:** `types.WALSegmentIndexer` and `CurrentSegmentIndex()` on LocalFS and AWS S3 backends for segment gauge support.
+- **Buffer:** `InMemoryBuffer.Stats()` for observable buffer gauges.
+- **Examples / tooling:** `examples/telemetry` and `make run_telemetry_example` (stdout metrics, stderr traces) for local verification.
+- **Docs:** [OBSERVABILITY.md](./OBSERVABILITY.md) (full metric and span reference); README **Observability** section.
+- **Dependencies:** OpenTelemetry Go SDK (`go.opentelemetry.io/otel` v1.29.0 and related modules, including stdout exporters for the telemetry example).
+
+[0.5.0]: https://github.com/pantuza/xwal/releases/tag/v0.5.0
+
 ## [0.4.2] - 2026-03-27
 
 ### Added
