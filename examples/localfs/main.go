@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pantuza/xwal/internal/xwal"
+	"github.com/pantuza/xwal"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 )
 

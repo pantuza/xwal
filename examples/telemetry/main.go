@@ -18,7 +18,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/pantuza/xwal/internal/xwal"
+	"github.com/pantuza/xwal"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"

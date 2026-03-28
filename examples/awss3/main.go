@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/pantuza/xwal/internal/xwal"
+	"github.com/pantuza/xwal"
 	"github.com/pantuza/xwal/pkg/backends/awss3"
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"

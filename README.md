@@ -11,63 +11,81 @@ A Cross, thread-safe and buffered Write Ahead Log (WAL) library for Golang appli
 [![Go Reference](https://pkg.go.dev/badge/github.com/pantuza/xwal)](https://pkg.go.dev/github.com/pantuza/xwal)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pantuza/xwal)](https://goreportcard.com/report/github.com/pantuza/xwal)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Library Latest Version](https://img.shields.io/badge/Package_Latest_Version-blue)](https://github.com/pantuza/xwal/releases)
+[![GitHub release](https://img.shields.io/github/v/release/pantuza/xwal?sort=semver)](https://github.com/pantuza/xwal/releases)
 
 </div>
 
-* Cross? Yes, we mean you can choose your WAL Backend: Local Filesystem, AWS s3, etc.
-* Thread-safe? Yes, once you have a xwal instance, you can safelly call its methods concurrently.
-* Buffered? Yes, xwal uses an In Memory Buffer that flushes to the chosen WAL Backend asynchronosly.
+* Cross? Yes, we mean you can choose your WAL Backend: Local Filesystem, AWS S3, etc.
+* Thread-safe? Yes, once you have an xwal instance, you can safely call its methods concurrently.
+* Buffered? Yes, xwal uses an in-memory buffer that flushes to the chosen WAL Backend asynchronously.
+
+## When to use xwal
+
+xwal fits when you want an **application-level WAL** with **pluggable storage** (local disk or S3-shaped object stores), **optional buffering** before persistence, and **replay** into your own code. It is not an embedded LSM like BoltDB, not etcd’s replicated WAL, and not a general audit log framework: it focuses on ordered append, recovery-style replay, checkpoints, and OpenTelemetry hooks. If you only need crash-safe local logs inside one process, a simpler file logger may suffice; if you need multi-host consensus, use a system designed for that.
 
 ## Requirements
 
 - Go **1.26** or newer (see `go.mod`).
 
 ## Installation
+
 ```bash
 go get github.com/pantuza/xwal
 ```
 
 ## Usage
 
+Import the **module root** (not a nested `internal` path):
+
 ```go
-cfg := xwal.NewXWALConfig("") // Uses default configuration
+import (
+	"github.com/pantuza/xwal"
+	"github.com/pantuza/xwal/protobuf/xwalpb"
+)
 
-xwal, err := xwal.NewXWAL(cfg) // Creates a new WAL instance
-if err != nil {
-  panic(err)
-}
-defer xwal.Close()
+func example() error {
+	cfg := xwal.NewXWALConfig("") // default configuration (optional YAML: xwal.yaml)
 
-// Your WAL is ready to be used. Thus, elsewhere in your code you can call:
-err := xwal.Write([]byte(`{"data": "any data in any format serialized to bytes you want to persist in the WAL"}`))
-if err != nil {
-  panic(err)
-}
+	w, err := xwal.NewXWAL(cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = w.Close() }()
 
-// Let's suppose your remote backend is failing and you need to Replay data from WAL to it.
-// You simply provide xwal a callback function that speaks to your backend and xwal will
-// make sure to give you the stored data in the order you want:
-func myCallback(entries []*xwalpb.WALEntry) error {
-  for _, entry := range entries {
-    // Here you can send your data to your backend or do any computation you want
-  }
-  return nil
-}
+	if err := w.Write([]byte(`{"data": "serialized payload"}`)); err != nil {
+		return err
+	}
 
-err = xwal.Replay(myCallback, 5, false) // Replay reads entries from the WAL and sends to your callback function
-if err != nil {
-  panic(err)
+	// Replay delivers stored entries to your callback in order.
+	if err := w.Replay(func(entries []*xwalpb.WALEntry) error {
+		for _, entry := range entries {
+			_ = entry // send to your remote system or apply locally
+		}
+		return nil
+	}, 5, false); err != nil {
+		return err
+	}
+	return nil
 }
 ```
+
+Set `cfg.WALBackend` and `cfg.BackendConfig` for LocalFS or AWS S3; see [examples](./examples/).
+
+## Durability and errors
+
+- **Buffer vs disk/object store:** Appends land in memory first; they reach the backend when the buffer is full, on the periodic flush ticker, or when you close the WAL (subject to backend behavior).
+- **Backend write failures:** If the backend returns an error during a flush, xwal logs the error and records metrics/traces; the internal flush helper historically returns `nil` for backward compatibility, so **do not assume** that a successful return from `Write` means data is already durable until you understand this contract. Monitor `xwal.backend.errors` and logs in production. See [OBSERVABILITY.md](./OBSERVABILITY.md).
+- **Shutdown:** Call `Close()` for graceful teardown (stops the flush ticker, waits for in-flight appends, closes the backend). SIGINT/SIGTERM trigger `Close` from a background handler.
+- **Config file:** If loading fails, xwal falls back to defaults. A **missing** default `xwal.yaml` (when you call `NewXWALConfig("")`) is silent; other failures (explicit path missing, read/parse errors) are logged with the standard library logger.
 
 ## Available Backends
 
 | Backend | Description   | Examples   |
 |-------------- | -------------- | -------------- |
 | **Local FS**    | WAL entries are stored on the local filesystem     | [localfs](./examples/localfs/)     |
-| **AWS s3**    | WAL entries are stored remotely on AWS s3 service    | [awss3](./examples/awss3/)  |
+| **AWS S3**    | WAL entries are stored remotely on AWS S3    | [awss3](./examples/awss3/)  |
 
+Custom backends: [BACKENDS.md](./BACKENDS.md) and [`pkg/types/wal_backend.go`](./pkg/types/wal_backend.go).
 
 ## Features
 
@@ -114,11 +132,17 @@ ok      github.com/pantuza/xwal/benchmark       30.240s
 
 ## Contributing
 
-Fork the repository, create a branch, and open a pull request. Run `make check` before pushing so lint, tests, benchmarks, and examples all pass. After changing Go or CI tooling, let GitHub Actions finish on your branch before tagging a release. Install **golangci-lint v2** with the same toolchain as the module (`GOTOOLCHAIN=go1.26.0 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4`) or run `make setup`. The Makefile prefers `$(go env GOPATH)/bin/golangci-lint` over an older system copy. Keep changes focused and update the changelog when the behavior or public API changes.
+See [CONTRIBUTING.md](./CONTRIBUTING.md). Short version: fork, branch, run `make check`, open a PR, and update the changelog when behavior or the public API changes.
+
+## Security
+
+See [SECURITY.md](./SECURITY.md).
 
 ## License
+
 * [MIT License](./LICENSE)
 
 ## Knowledge Base
+
 * [Write Ahead Log](https://en.wikipedia.org/wiki/Write-ahead_logging)
 * [xWAL examples](./examples)

@@ -2,6 +2,7 @@ package xwal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -264,7 +265,7 @@ func (wal *XWAL) WriteBatchContext(ctx context.Context, entries []*xwalpb.WALEnt
 func (wal *XWAL) writeOrFlush(ctx context.Context, entry *xwalpb.WALEntry) error {
 	// If the buffer is full, flush it
 	if err := wal.buffer.Write(entry); err != nil {
-		if err.Error() == buffer.ErrorShouldFlushBuffer {
+		if errors.Is(err, buffer.ErrShouldFlushBuffer) {
 			// Flushes the In Memory Buffer and Writes to the WAL Backend
 			if err := wal.flushToBackend(ctx, "full"); err != nil {
 				return err
@@ -521,6 +522,9 @@ func (wal *XWAL) Close() error {
 
 	wal.closed = true // Now xWAL is closed. No more writes are allowed
 
+	if wal.backend == nil {
+		return nil
+	}
 	return wal.backend.Close()
 }
 

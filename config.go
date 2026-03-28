@@ -1,7 +1,9 @@
 package xwal
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -63,13 +65,19 @@ type TelemetryConfig struct {
 
 // Creates a new XWALConfig from yaml file or default values
 func NewXWALConfig(filename string) *XWALConfig {
-	if filename == "" {
+	useDefaultName := filename == ""
+	if useDefaultName {
 		filename = XWALConfigDefaultFile
 	}
 
 	config, err := loadConfigFromFile(filename)
 	if err != nil {
-		// TODO: Log to stdout we couldn't load the config file and will assume defaults
+		// NewXWALConfig("") tries xwal.yaml; a missing file is the normal case in tests and
+		// apps that configure entirely in code—avoid spamming the default logger.
+		quiet := useDefaultName && errors.Is(err, os.ErrNotExist)
+		if !quiet {
+			log.Printf("xwal: could not load config file %q: %v; using defaults", filename, err)
+		}
 		config = loadDefaultConfigValues()
 	}
 
@@ -125,12 +133,10 @@ func loadConfigFromFile(filename string) (*XWALConfig, error) {
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		// TODO: Log to stdout we couldn't READ the config file return config, nil
 		return nil, err
 	}
 
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		// TODO: Log to stdout we couldn't Unmarshal the config file return config, nil
 		return nil, err
 	}
 

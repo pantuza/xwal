@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/pantuza/xwal/internal/xwal"
+	"github.com/pantuza/xwal"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 )
 

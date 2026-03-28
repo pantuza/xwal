@@ -5,7 +5,7 @@ For humans and coding assistants. Not tied to any single AI product.
 ## Stack
 
 - **Go:** version in [`go.mod`](go.mod) (toolchain pinned there).
-- **Module:** `github.com/pantuza/xwal`. Core WAL API: [`internal/xwal`](internal/xwal).
+- **Module:** `github.com/pantuza/xwal`. Core WAL API: root `package xwal` (Go sources next to `go.mod`, import path `github.com/pantuza/xwal`).
 
 ## Verify before push
 

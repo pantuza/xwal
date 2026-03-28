@@ -1,0 +1,8 @@
+# https://golangci-lint.run/docs/configuration/file
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
