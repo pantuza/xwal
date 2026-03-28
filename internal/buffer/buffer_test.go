@@ -1,6 +1,7 @@
 package buffer
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/pantuza/xwal/protobuf/xwalpb"
@@ -38,7 +39,7 @@ func TestWriteAndFlush(t *testing.T) {
 
 	// This write should fail as it exceeds the number of entries limit
 	err = buffer.Write(entry)
-	assert.EqualError(t, err, ErrorShouldFlushBuffer)
+	assert.True(t, errors.Is(err, ErrShouldFlushBuffer))
 
 	// Flush the buffer
 	flushedData := buffer.Flush()
@@ -61,7 +62,7 @@ func TestWriteExceedsMaxBufferSizeMB(t *testing.T) {
 
 	}
 	err := buffer.Write(largeEntry)
-	assert.EqualError(t, err, ErrorShouldFlushBuffer, "Expected error when writing entry that exceeds buffer size")
+	assert.True(t, errors.Is(err, ErrShouldFlushBuffer), "expected flush sentinel when entry exceeds buffer size")
 }
 
 func TestReset(t *testing.T) {
