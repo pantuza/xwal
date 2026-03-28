@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed (breaking)
+
+- **Import path:** The stable public API is now the module root package `github.com/pantuza/xwal` (Go sources next to `go.mod`). The former `github.com/pantuza/xwal/internal/xwal` path is removed; update imports accordingly.
+
+### Changed
+
+- **Buffer:** Flush-needed condition is reported with sentinel error `buffer.ErrShouldFlushBuffer` and `errors.Is` instead of a string constant compared via `err.Error()`.
+
+### Removed
+
+- Unused `XWALError` / `XWALErrorTypes` types (nothing in the library returned them).
+
+### Added
+
+- **Docs:** Root [doc.go](doc.go) for pkg.go.dev, [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [BACKENDS.md](BACKENDS.md); README durability notes and positioning; dynamic GitHub release badge.
+
+### Fixed
+
+- **Config:** When the YAML file cannot be loaded, fall back to defaults; log with the standard library `log` package only if the path was **explicit** or the error is not “file not found” for the default `xwal.yaml` used by `NewXWALConfig("")` (avoids noisy output in tests and code-only setups).
+
 ## [0.5.0] - 2026-03-28
 
 ### Added
