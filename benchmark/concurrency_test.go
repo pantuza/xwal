@@ -3,7 +3,7 @@ package benchmark
 import (
 	"testing"
 
-	"github.com/pantuza/xwal/internal/xwal"
+	"github.com/pantuza/xwal"
 	"github.com/stretchr/testify/assert"
 )
 
