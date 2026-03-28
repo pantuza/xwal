@@ -639,3 +639,8 @@ func (wal *LocalFSWALBackend) LastIndex() uint64 {
 func (wal *LocalFSWALBackend) IncLastIndex() {
 	wal.lastLSN++
 }
+
+// CurrentSegmentIndex implements types.WALSegmentIndexer for observability.
+func (wal *LocalFSWALBackend) CurrentSegmentIndex() uint64 {
+	return wal.lastSegmentIndex
+}

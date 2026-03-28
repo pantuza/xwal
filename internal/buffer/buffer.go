@@ -56,3 +56,9 @@ func (b *InMemoryBuffer) Reset() {
 	b.MBCounter = 0
 	b.Buffer = make([]*xwalpb.WALEntry, 0, b.NumberOfEntries)
 }
+
+// Stats returns the current entry count and approximate buffered payload size in bytes
+// derived from the same accounting used for flush thresholds (protobuf size, MB float).
+func (b *InMemoryBuffer) Stats() (entries int, approxSizeBytes int64) {
+	return b.WritesCounter, int64(b.MBCounter * 1024 * 1024)
+}

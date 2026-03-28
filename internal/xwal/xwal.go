@@ -11,11 +11,14 @@ import (
 
 	"github.com/pantuza/xwal/internal/buffer"
 	"github.com/pantuza/xwal/internal/logs"
+	"github.com/pantuza/xwal/internal/telemetry"
 	"github.com/pantuza/xwal/pkg/backends/awss3"
 	"github.com/pantuza/xwal/pkg/backends/localfs"
 	"github.com/pantuza/xwal/pkg/types"
 	"github.com/pantuza/xwal/protobuf/xwalpb"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 )
 
 // The replay callback function signature
@@ -53,6 +56,9 @@ type XWAL struct {
 
 	// Logger reference
 	logger *zap.Logger
+
+	tel           *telemetry.Telemetry
+	obsUnregister func() error
 }
 
 func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
@@ -67,6 +73,18 @@ func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	telCfg := telemetry.Config{}
+	if cfg.Telemetry != nil {
+		telCfg.Disabled = cfg.Telemetry.Disabled
+		telCfg.MeterProvider = cfg.Telemetry.MeterProvider
+		telCfg.TracerProvider = cfg.Telemetry.TracerProvider
+	}
+	tel, err := telemetry.New(telCfg)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("telemetry: %w", err)
+	}
+
 	wal := &XWAL{
 		cfg:           cfg,
 		lock:          sync.RWMutex{},
@@ -77,13 +95,49 @@ func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
 		FlushInterval: time.NewTicker(cfg.FlushFrequency),
 		buffer:        buffer.NewInMemoryBuffer(cfg.BufferSize, cfg.BufferEntriesLength),
 		logger:        logger,
+		tel:           tel,
 	}
 
 	wal.loadBackend()
+
+	unreg, err := tel.RegisterObservers(wal.observeMetricsSnapshot)
+	if err != nil {
+		cancel()
+		if wal.backend != nil {
+			_ = wal.backend.Close()
+		}
+		return nil, fmt.Errorf("telemetry observers: %w", err)
+	}
+	wal.obsUnregister = unreg
+
 	go wal.PeriodicFlush()
 	wal.osSignalHandler()
 
 	return wal, nil
+}
+
+func (wal *XWAL) observeMetricsSnapshot() (entries, bytes, lsn, segment int64) {
+	wal.lock.RLock()
+	defer wal.lock.RUnlock()
+	if wal.buffer != nil {
+		e, b := wal.buffer.Stats()
+		entries = int64(e)
+		bytes = b
+	}
+	if wal.backend != nil {
+		lsn = int64(wal.backend.LastIndex())
+		if s, ok := wal.backend.(types.WALSegmentIndexer); ok {
+			segment = int64(s.CurrentSegmentIndex())
+		}
+	}
+	return entries, bytes, lsn, segment
+}
+
+func (wal *XWAL) backendType() types.WALBackendType {
+	if wal.backend == nil {
+		return types.WALBackendType("none")
+	}
+	return wal.backend.Type()
 }
 
 func (wal *XWAL) loadBackend() {
@@ -113,7 +167,7 @@ func (wal *XWAL) PeriodicFlush() {
 		select {
 		case <-wal.FlushInterval.C:
 			wal.lock.Lock()
-			if err := wal.flushToBackend(); err != nil {
+			if err := wal.flushToBackend(context.Background(), "periodic"); err != nil {
 				wal.logger.Error("Error running PeriodicFlush", zap.Error(err))
 			}
 			wal.lock.Unlock()
@@ -125,9 +179,22 @@ func (wal *XWAL) PeriodicFlush() {
 }
 
 func (wal *XWAL) Write(data []byte) error {
+	return wal.WriteContext(context.Background(), data)
+}
+
+// WriteContext appends data to the WAL using ctx for trace propagation when the host
+// application has configured a global or custom OpenTelemetry TracerProvider.
+func (wal *XWAL) WriteContext(ctx context.Context, data []byte) (err error) {
 	if wal.closed {
 		return fmt.Errorf("xwal is closed: no more writes are allowed")
 	}
+
+	ctx, span := wal.tel.StartWriteSpan(ctx)
+	start := time.Now()
+	defer func() {
+		wal.tel.RecordWrite(ctx, wal.backendType(), int64(len(data)), time.Since(start), err)
+		telemetry.EndSpan(span, err)
+	}()
 
 	wal.lock.Lock()
 	defer wal.lock.Unlock()
@@ -140,7 +207,7 @@ func (wal *XWAL) Write(data []byte) error {
 		return fmt.Errorf("creating wal entry: %w", err)
 	}
 
-	return wal.writeOrFlush(entry)
+	return wal.writeOrFlush(ctx, entry)
 }
 
 func (wal *XWAL) createWALEntry(data []byte) (*xwalpb.WALEntry, error) {
@@ -164,11 +231,29 @@ func (wal *XWAL) createWALEntry(data []byte) (*xwalpb.WALEntry, error) {
 }
 
 func (wal *XWAL) WriteBatch(entries []*xwalpb.WALEntry) error {
+	return wal.WriteBatchContext(context.Background(), entries)
+}
+
+// WriteBatchContext appends pre-built entries using ctx for trace propagation.
+func (wal *XWAL) WriteBatchContext(ctx context.Context, entries []*xwalpb.WALEntry) (err error) {
 	wal.lock.Lock()
 	defer wal.lock.Unlock()
 
+	n := len(entries)
+	var payloadSum int64
+	for _, e := range entries {
+		payloadSum += int64(len(e.GetData()))
+	}
+
+	ctx, span := wal.tel.StartWriteBatchSpan(ctx, n)
+	start := time.Now()
+	defer func() {
+		wal.tel.RecordWriteBatch(ctx, wal.backendType(), n, payloadSum, time.Since(start), err)
+		telemetry.EndSpan(span, err)
+	}()
+
 	for _, entry := range entries {
-		if err := wal.writeOrFlush(entry); err != nil {
+		if err = wal.writeOrFlush(ctx, entry); err != nil {
 			return err
 		}
 	}
@@ -176,12 +261,12 @@ func (wal *XWAL) WriteBatch(entries []*xwalpb.WALEntry) error {
 	return nil
 }
 
-func (wal *XWAL) writeOrFlush(entry *xwalpb.WALEntry) error {
+func (wal *XWAL) writeOrFlush(ctx context.Context, entry *xwalpb.WALEntry) error {
 	// If the buffer is full, flush it
 	if err := wal.buffer.Write(entry); err != nil {
 		if err.Error() == buffer.ErrorShouldFlushBuffer {
 			// Flushes the In Memory Buffer and Writes to the WAL Backend
-			if err := wal.flushToBackend(); err != nil {
+			if err := wal.flushToBackend(ctx, "full"); err != nil {
 				return err
 			}
 
@@ -197,19 +282,40 @@ func (wal *XWAL) writeOrFlush(entry *xwalpb.WALEntry) error {
 	return nil
 }
 
-func (wal *XWAL) flushToBackend() error {
+func (wal *XWAL) flushToBackend(ctx context.Context, reason string) error {
 	if wal.backend == nil {
 		return nil
 	}
-	// Flushes the In Memory Buffer and Writes to the WAL Backend
-	entriesToPersist := wal.buffer.Flush()
+	btyp := wal.backendType()
+	wal.tel.RecordBufferFlush(ctx, reason, btyp)
 
-	// TODO: Asynchronously writes to the backend
-	// go func() {
-	if err := wal.backend.Write(entriesToPersist); err != nil {
-		wal.logger.Error("Error flushing to backend", zap.Error(err))
+	entriesToPersist := wal.buffer.Flush()
+	n := len(entriesToPersist)
+	var serialized int64
+	for _, e := range entriesToPersist {
+		serialized += int64(proto.Size(e))
 	}
-	// }()
+
+	fctx, fspan := wal.tel.StartFlushSpan(ctx, btyp, reason, n)
+	var flushErr error
+	defer func() {
+		telemetry.EndSpan(fspan, flushErr)
+	}()
+
+	if n == 0 {
+		return nil
+	}
+
+	bctx, bspan := wal.tel.StartBackendWriteSpan(fctx, btyp, n)
+	start := time.Now()
+	err := wal.backend.Write(entriesToPersist)
+	dur := time.Since(start)
+	wal.tel.RecordBackendWrite(bctx, btyp, n, serialized, dur, err)
+	telemetry.EndSpan(bspan, err)
+	if err != nil {
+		wal.logger.Error("Error flushing to backend", zap.Error(err))
+		flushErr = err
+	}
 
 	return nil
 }
@@ -217,7 +323,7 @@ func (wal *XWAL) flushToBackend() error {
 // CreateCheckpoint creates a checkpoint on the WAL. Checkpoints are simply suffixes on the segments files.
 // Checkpoints will be used for Replaying the WAL from or to a given checkpoint.
 // The method returns the checkpoint segments file number so the user can store it for later replay from that particular checkpoint further.
-func (wal *XWAL) CreateCheckpoint() (uint64, error) {
+func (wal *XWAL) CreateCheckpoint() (checkpoint uint64, err error) {
 	if wal.closed {
 		return 0, fmt.Errorf("xwal is closed: no more checkpoints are allowed")
 	}
@@ -225,109 +331,107 @@ func (wal *XWAL) CreateCheckpoint() (uint64, error) {
 	wal.lock.Lock()
 	defer wal.lock.Unlock()
 
-	return wal.backend.CreateCheckpoint()
+	ctx, span := wal.tel.StartCheckpointSpan(context.Background(), wal.backendType())
+	defer func() {
+		if err == nil {
+			span.SetAttributes(attribute.Int64("xwal.checkpoint.id", int64(checkpoint)))
+			wal.tel.RecordCheckpoint(ctx, wal.backendType())
+		}
+		telemetry.EndSpan(span, err)
+	}()
+
+	checkpoint, err = wal.backend.CreateCheckpoint()
+	return checkpoint, err
+}
+
+func (wal *XWAL) runReplay(
+	ctx context.Context,
+	mode string,
+	extra []attribute.KeyValue,
+	batchSize int,
+	callback ReplayCallbackFunc,
+	backendRun func(ch chan *xwalpb.WALEntry) error,
+) (rerr error) {
+	if wal.closed {
+		return fmt.Errorf("xwal is closed: no more replays are allowed")
+	}
+
+	btyp := wal.backendType()
+	ctx, span := wal.tel.StartReplaySpan(ctx, btyp, mode, extra...)
+	start := time.Now()
+	wal.tel.RecordReplayStart(ctx, btyp, mode)
+	defer func() {
+		wal.tel.RecordReplayDuration(ctx, btyp, mode, time.Since(start), rerr)
+		telemetry.EndSpan(span, rerr)
+	}()
+
+	wal.lock.RLock()
+	defer wal.lock.RUnlock()
+
+	channel := make(chan *xwalpb.WALEntry, 1)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go wal.replayEntriesUsingUserCallback(channel, batchSize, callback, &wg)
+
+	if err := backendRun(channel); err != nil {
+		wal.abortReplayConsumer(channel, &wg)
+		rerr = fmt.Errorf("replaying entries: %w", err)
+		wal.tel.RecordBackendError(ctx, btyp, "replay")
+		return rerr
+	}
+	close(channel)
+
+	wg.Wait()
+	return nil
 }
 
 // ReplayFromCheckpoint replays the WAL FROM a given checkpoint til the END of the WAL.
 // It can be replayed backwards: from the end of the WAL til the given checkpoint.
 // Entries read from the WAL Backend will be processed by the provided callback function.
 func (wal *XWAL) ReplayFromCheckpoint(callback ReplayCallbackFunc, checkpoint uint64, backwards bool) error {
-	if wal.closed {
-		return fmt.Errorf("xwal is closed: no more replays are allowed")
-	}
-
-	wal.lock.RLock()
-	defer wal.lock.RUnlock()
-
-	channel := make(chan *xwalpb.WALEntry, 1)
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go wal.replayEntriesUsingUserCallback(channel, wal.cfg.BufferEntriesLength, callback, &wg)
-
-	if err := wal.backend.ReplayFromCheckpoint(channel, checkpoint, backwards); err != nil {
-		wal.abortReplayConsumer(channel, &wg)
-		return fmt.Errorf("replaying entries: %w", err)
-	}
-	close(channel)
-
-	wg.Wait()
-	return nil
+	return wal.runReplay(context.Background(), "from_checkpoint",
+		[]attribute.KeyValue{
+			attribute.Int64("xwal.checkpoint", int64(checkpoint)),
+			attribute.Bool("xwal.replay.backwards", backwards),
+		},
+		wal.cfg.BufferEntriesLength, callback, func(ch chan *xwalpb.WALEntry) error {
+			return wal.backend.ReplayFromCheckpoint(ch, checkpoint, backwards)
+		})
 }
 
 // ReplayToCheckpoint replays the WAL from the BEGINNING of the WAL til the given checkpoint.
 // It can be replayed backwards: from the given checkpoint til the beginning of the WAL.
 // Entries read from the WAL Backend will be processed by the provided callback function.
 func (wal *XWAL) ReplayToCheckpoint(callback ReplayCallbackFunc, checkpoint uint64, backwards bool) error {
-	if wal.closed {
-		return fmt.Errorf("xwal is closed: no more replays are allowed")
-	}
-
-	wal.lock.RLock()
-	defer wal.lock.RUnlock()
-
-	channel := make(chan *xwalpb.WALEntry, 1)
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go wal.replayEntriesUsingUserCallback(channel, wal.cfg.BufferEntriesLength, callback, &wg)
-
-	if err := wal.backend.ReplayToCheckpoint(channel, checkpoint, backwards); err != nil {
-		wal.abortReplayConsumer(channel, &wg)
-		return fmt.Errorf("replaying entries: %w", err)
-	}
-	close(channel)
-
-	wg.Wait()
-	return nil
+	return wal.runReplay(context.Background(), "to_checkpoint",
+		[]attribute.KeyValue{
+			attribute.Int64("xwal.checkpoint", int64(checkpoint)),
+			attribute.Bool("xwal.replay.backwards", backwards),
+		},
+		wal.cfg.BufferEntriesLength, callback, func(ch chan *xwalpb.WALEntry) error {
+			return wal.backend.ReplayToCheckpoint(ch, checkpoint, backwards)
+		})
 }
 
 func (wal *XWAL) Replay(callback ReplayCallbackFunc, batchSize int, backwards bool) error {
-	if wal.closed {
-		return fmt.Errorf("xwal is closed: no more replays are allowed")
-	}
-
-	wal.lock.RLock()
-	defer wal.lock.RUnlock()
-
-	channel := make(chan *xwalpb.WALEntry, 1)
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go wal.replayEntriesUsingUserCallback(channel, batchSize, callback, &wg)
-
-	if err := wal.backend.Replay(channel, backwards); err != nil {
-		wal.abortReplayConsumer(channel, &wg)
-		return fmt.Errorf("replaying entries: %w", err)
-	}
-	close(channel)
-
-	wg.Wait()
-	return nil
+	return wal.runReplay(context.Background(), "full",
+		[]attribute.KeyValue{attribute.Bool("xwal.replay.backwards", backwards)},
+		batchSize, callback, func(ch chan *xwalpb.WALEntry) error {
+			return wal.backend.Replay(ch, backwards)
+		})
 }
 
 func (wal *XWAL) ReplayFromRange(callback ReplayCallbackFunc, batchSize int, backwards bool, start, end uint64) error {
-	if wal.closed {
-		return fmt.Errorf("xwal is closed: no more replays are allowed")
-	}
-
-	wal.lock.RLock()
-	defer wal.lock.RUnlock()
-
-	channel := make(chan *xwalpb.WALEntry, 1)
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go wal.replayEntriesUsingUserCallback(channel, batchSize, callback, &wg)
-
-	if err := wal.backend.ReplayFromRange(channel, backwards, start, end); err != nil {
-		wal.abortReplayConsumer(channel, &wg)
-		return fmt.Errorf("replaying entries: %w", err)
-	}
-	close(channel)
-
-	wg.Wait()
-	return nil
+	return wal.runReplay(context.Background(), "range",
+		[]attribute.KeyValue{
+			attribute.Int64("xwal.replay.start", int64(start)),
+			attribute.Int64("xwal.replay.end", int64(end)),
+			attribute.Bool("xwal.replay.backwards", backwards),
+		},
+		batchSize, callback, func(ch chan *xwalpb.WALEntry) error {
+			return wal.backend.ReplayFromRange(ch, backwards, start, end)
+		})
 }
 
 // abortReplayConsumer closes the replay channel and waits for the callback goroutine after a backend error.
@@ -347,6 +451,9 @@ func (wal *XWAL) replayEntriesUsingUserCallback(channel chan *xwalpb.WALEntry, b
 				// If there are entries left, call the callback function
 				if err := callback(entries); err != nil {
 					wal.logger.Error("Error replaying entries using user callback", zap.Error(err))
+					wal.tel.RecordReplayCallbackError(context.Background(), wal.backendType())
+				} else {
+					wal.tel.RecordReplayEntries(context.Background(), wal.backendType(), int64(len(entries)))
 				}
 
 				wg.Done()
@@ -358,7 +465,9 @@ func (wal *XWAL) replayEntriesUsingUserCallback(channel chan *xwalpb.WALEntry, b
 			if len(entries) == batchSize {
 				if err := callback(entries); err != nil {
 					wal.logger.Error("Error calling user callback", zap.Error(err))
+					wal.tel.RecordReplayCallbackError(context.Background(), wal.backendType())
 				} else {
+					wal.tel.RecordReplayEntries(context.Background(), wal.backendType(), int64(len(entries)))
 					entries = make([]*xwalpb.WALEntry, 0, batchSize)
 				}
 			}
@@ -392,6 +501,11 @@ func (wal *XWAL) Close() error {
 	defer func() {
 		_ = wal.logger.Sync()
 	}()
+
+	if wal.obsUnregister != nil {
+		_ = wal.obsUnregister()
+		wal.obsUnregister = nil
+	}
 
 	wal.lock.Lock()
 	defer wal.lock.Unlock()

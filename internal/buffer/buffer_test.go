@@ -5,6 +5,7 @@ import (
 
 	"github.com/pantuza/xwal/protobuf/xwalpb"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestNewInMemoryBuffer(t *testing.T) {
@@ -79,4 +80,14 @@ func TestReset(t *testing.T) {
 	assert.Equal(t, 0, buffer.WritesCounter)
 	assert.Equal(t, 0.0, buffer.MBCounter)
 	assert.Len(t, buffer.Buffer, 0)
+}
+
+func TestStats(t *testing.T) {
+	b := NewInMemoryBuffer(10, 10)
+	entry := &xwalpb.WALEntry{LSN: 1, Data: []byte("hello")}
+	assert.NoError(t, b.Write(entry))
+
+	entries, approxBytes := b.Stats()
+	assert.Equal(t, 1, entries)
+	assert.Equal(t, int64(proto.Size(entry)), approxBytes)
 }

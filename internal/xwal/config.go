@@ -8,6 +8,8 @@ import (
 	"github.com/pantuza/xwal/pkg/backends/awss3"
 	"github.com/pantuza/xwal/pkg/backends/localfs"
 	"github.com/pantuza/xwal/pkg/types"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -43,6 +45,20 @@ type XWALConfig struct {
 
 	// Defines which log level should xWAL use (debug, info, warn, error)
 	LogLevel string `yaml:"logLevel"`
+
+	// Telemetry configures OpenTelemetry metrics and traces. When nil, telemetry is
+	// enabled using the global OpenTelemetry MeterProvider and TracerProvider.
+	Telemetry *TelemetryConfig `yaml:"telemetry,omitempty"`
+}
+
+// TelemetryConfig holds optional OpenTelemetry providers for library instrumentation.
+// MeterProvider and TracerProvider are not loaded from YAML; set them in code so
+// metrics scrape with the host application (for example, a shared Prometheus exporter).
+type TelemetryConfig struct {
+	Disabled bool `yaml:"disabled,omitempty"`
+
+	MeterProvider  metric.MeterProvider `yaml:"-"`
+	TracerProvider trace.TracerProvider `yaml:"-"`
 }
 
 // Creates a new XWALConfig from yaml file or default values
