@@ -41,7 +41,7 @@ endef
 .PHONY: help
 help:  ## Displays help message
 	@echo "Makefile to control tasks for $(BLUE)$(PROJECT)$(CLRRST) project"
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z0-9_-]+:.*?##/ { printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
 
 .PHONY: protobuf
@@ -136,8 +136,8 @@ run_telemetry_example: ./examples/telemetry/main.go _clrscr ## Runs xWAL with st
 
 
 .PHONY: run_awss3_example
-run_awss3_example: ./examples/awss3/main.go _clrscr ## Runs xWAL with AWS s3 backend example
-	$(call title, Running xWAL with AWS s3 backend example..)
+run_awss3_example: ./examples/awss3/main.go _clrscr ## Runs S3 WAL example (real Amazon S3 unless XWAL_S3_ENDPOINT is set)
+	$(call title, Running xWAL AWS S3 backend example..)
 	@go run $<
 
 
