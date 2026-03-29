@@ -99,7 +99,13 @@ func NewXWAL(cfg *XWALConfig) (*XWAL, error) {
 		tel:           tel,
 	}
 
-	wal.loadBackend()
+	if err := wal.loadBackend(); err != nil {
+		cancel()
+		if wal.backend != nil {
+			_ = wal.backend.Close()
+		}
+		return nil, err
+	}
 
 	unreg, err := tel.RegisterObservers(wal.observeMetricsSnapshot)
 	if err != nil {
@@ -141,7 +147,7 @@ func (wal *XWAL) backendType() types.WALBackendType {
 	return wal.backend.Type()
 }
 
-func (wal *XWAL) loadBackend() {
+func (wal *XWAL) loadBackend() error {
 	switch wal.cfg.WALBackend {
 	case types.LocalFileSystemWALBackend:
 		wal.cfg.BackendConfig.LocalFS.Logger = wal.logger
@@ -155,12 +161,14 @@ func (wal *XWAL) loadBackend() {
 
 	if wal.backend == nil {
 		wal.logger.Error("Unknown or unsupported WAL backend", zap.String("walBackend", string(wal.cfg.WALBackend)))
-		return
+		return nil
 	}
 
 	if err := wal.backend.Open(); err != nil {
 		wal.logger.Error("Error opening WAL backend", zap.Error(err))
+		return fmt.Errorf("opening WAL backend: %w", err)
 	}
+	return nil
 }
 
 func (wal *XWAL) PeriodicFlush() {
@@ -316,6 +324,7 @@ func (wal *XWAL) flushToBackend(ctx context.Context, reason string) error {
 	if err != nil {
 		wal.logger.Error("Error flushing to backend", zap.Error(err))
 		flushErr = err
+		return err
 	}
 
 	return nil
@@ -366,8 +375,12 @@ func (wal *XWAL) runReplay(
 		telemetry.EndSpan(span, rerr)
 	}()
 
-	wal.lock.RLock()
-	defer wal.lock.RUnlock()
+	wal.lock.Lock()
+	defer wal.lock.Unlock()
+
+	if err := wal.flushToBackend(ctx, "replay"); err != nil {
+		return fmt.Errorf("flush before replay: %w", err)
+	}
 
 	channel := make(chan *xwalpb.WALEntry, 1)
 	var wg sync.WaitGroup
@@ -520,12 +533,33 @@ func (wal *XWAL) Close() error {
 	// Wait for all pending writes to finish
 	wal.wg.Wait()
 
-	wal.closed = true // Now xWAL is closed. No more writes are allowed
+	if wal.backend != nil {
+		if err := wal.flushToBackend(context.Background(), "close"); err != nil {
+			wal.logger.Error("Error flushing to backend on close", zap.Error(err))
+			wal.closed = true
+			_ = wal.backend.Close()
+			return err
+		}
+	}
+
+	wal.closed = true // No more writes are allowed
 
 	if wal.backend == nil {
 		return nil
 	}
 	return wal.backend.Close()
+}
+
+// Flush persists any buffered entries to the WAL backend. Replay does this automatically
+// before reading from storage; use Flush when you need durability without replay (e.g. before
+// an external checkpoint).
+func (wal *XWAL) Flush(ctx context.Context) error {
+	if wal.closed {
+		return fmt.Errorf("xwal is closed: flush not allowed")
+	}
+	wal.lock.Lock()
+	defer wal.lock.Unlock()
+	return wal.flushToBackend(ctx, "manual")
 }
 
 func (wal *XWAL) IsClosed() bool {
