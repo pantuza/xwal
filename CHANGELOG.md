@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-03-29
+
+### Fixed
+
+- **xWAL:** Propagate backend write errors from buffer flush; return an error from `NewXWAL` when the backend `Open()` fails; flush the in-memory buffer before replay and on close; add `Flush(ctx)` for explicit durability.
+- **Examples (AWS S3):** Clarify production AWS vs LocalStack (`XWAL_S3_ENDPOINT`); support default credential chain; exit with actionable hints on auth/IMDS failures instead of panicking.
+- **Makefile:** `make help` includes targets whose names contain digits (for example `run_awss3_example`).
+
+[0.6.1]: https://github.com/pantuza/xwal/releases/tag/v0.6.1
+
 ## [0.6.0] - 2026-03-28
 
 ### Changed (breaking)
