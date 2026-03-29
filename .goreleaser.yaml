@@ -5,6 +5,12 @@ version: 1
 
 release:
   header: |
+    ### v0.6.1 — WAL flush/replay fixes and AWS S3 example
+
+    Patch release: **reliable buffer flush** (errors surfaced, flush before replay and on close), **`NewXWAL` fails** when the backend cannot open, new **`Flush(ctx)`**, improved **`examples/awss3`** (production vs LocalStack, credential hints, no panic on auth failures), and **`make help`** listing targets with digits in the name.
+
+    ---
+
     ### v0.6 — public API, docs, and tooling
 
     The stable import path is **`github.com/pantuza/xwal`** (root `package xwal`). Replace any former `internal/xwal` imports. This release adds **sentinel flush errors** (`buffer.ErrShouldFlushBuffer` + `errors.Is`), **CONTRIBUTING**, **SECURITY**, **BACKENDS** guides, **pkg.go.dev** [`doc.go`](https://github.com/pantuza/xwal/blob/{{ .Tag }}/doc.go), **README** durability and positioning, **golangci-lint v2** [config](https://github.com/pantuza/xwal/blob/{{ .Tag }}/.golangci.yml), and **quieter default config** loading (missing default `xwal.yaml` with `NewXWALConfig("")` does not log). OpenTelemetry from v0.5 is unchanged—see **[OBSERVABILITY.md](https://github.com/pantuza/xwal/blob/{{ .Tag }}/OBSERVABILITY.md)**.
